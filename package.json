@@ -1,0 +1,14 @@
+{
+  "name": "sona-forecast2",
+  "version": "1.0.0",
+  "private": true,
+  "description": "良輔さんの登山向け山岳気象予報「ソナ予報」フェッチャー(index.html)＋予報スキル(SKILL.md)。Coworkでの改修用テスト・点検を同梱。",
+  "scripts": {
+    "test": "node test/sona.test.js",
+    "check:drift": "node scripts/check-drift.js",
+    "verify": "npm test && npm run check:drift"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}
