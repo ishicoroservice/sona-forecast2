@@ -1,0 +1,1435 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ソナ予報 フェッチャー</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180.png">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root{
+  --abyss:#0e1726;
+  --ridge:#172234;
+  --ridge-2:#1d2b41;
+  --line:#27374f;
+  --frost:#e6edf5;
+  --mist:#8696ab;
+  --mist-dim:#5d6c82;
+  --sky:#5fb0e5;
+  --calm:#56c596;
+  --warn:#f2c14e;
+  --strong:#f2a25c;
+  --alert:#ef6f6f;
+  --display:'Space Grotesk',-apple-system,BlinkMacSystemFont,sans-serif;
+  --body:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, #16263c 0%, transparent 60%),
+    var(--abyss);
+  color:var(--frost);
+  font-family:var(--body);
+  line-height:1.6;
+  min-height:100vh;
+  padding:clamp(16px,4vw,40px) clamp(14px,4vw,24px) 64px;
+}
+.wrap{max-width:760px;margin:0 auto}
+
+/* header */
+.eyebrow{
+  font-family:var(--mono);
+  font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--mist);margin:0 0 6px;
+}
+h1{
+  font-family:var(--display);
+  font-weight:600;
+  font-size:clamp(26px,6vw,38px);
+  letter-spacing:-.01em;
+  margin:0 0 4px;
+  display:flex;align-items:center;gap:.4em;
+}
+.sub{color:var(--mist);font-size:14px;margin:0 0 28px}
+
+/* panels */
+.panel{
+  background:var(--ridge);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:clamp(16px,3.5vw,22px);
+  margin-bottom:18px;
+}
+.panel-head{
+  font-family:var(--display);
+  font-weight:600;font-size:16px;
+  margin:0 0 14px;
+  display:flex;align-items:center;gap:.5em;
+}
+.panel-head .hint{font-family:var(--body);font-weight:400;font-size:12px;color:var(--mist)}
+
+/* inputs */
+.row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.row:last-child{margin-bottom:0}
+label.fld{display:flex;flex-direction:column;gap:5px;flex:1 1 120px;min-width:0}
+.fld span{font-size:11px;letter-spacing:.04em;color:var(--mist);text-transform:uppercase;font-family:var(--mono)}
+input,select{
+  font-family:var(--body);font-size:15px;
+  background:var(--abyss);
+  color:var(--frost);
+  border:1px solid var(--line);
+  border-radius:9px;
+  padding:11px 12px;
+  width:100%;
+  -webkit-appearance:none;appearance:none;
+}
+select{background-image:linear-gradient(45deg,transparent 50%,var(--mist) 50%),linear-gradient(135deg,var(--mist) 50%,transparent 50%);background-position:calc(100% - 18px) 18px,calc(100% - 13px) 18px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:34px}
+input:focus,select:focus{outline:2px solid var(--sky);outline-offset:1px;border-color:transparent}
+input::placeholder{color:var(--mist-dim)}
+
+button{
+  font-family:var(--display);font-weight:600;font-size:15px;
+  cursor:pointer;border:none;border-radius:9px;
+  padding:12px 22px;transition:filter .15s,transform .05s;
+}
+button:active{transform:translateY(1px)}
+.btn-go{background:var(--sky);color:#06121f}
+.btn-go:hover{filter:brightness(1.08)}
+.btn-go:disabled{background:var(--line);color:var(--mist-dim);cursor:wait}
+.btn-ghost{background:transparent;color:var(--sky);border:1px solid var(--line);padding:11px 16px;font-size:13px}
+.btn-ghost:hover{border-color:var(--sky)}
+/* 集計モード切替＝コピーボタンと同じゴーストボタン外観で統一（矢印だけskyの▼） */
+#agg{font-family:var(--display);font-weight:600;font-size:13px;color:var(--sky);background:transparent;
+  background-image:linear-gradient(45deg,transparent 50%,var(--sky) 50%),linear-gradient(135deg,var(--sky) 50%,transparent 50%);
+  background-position:calc(100% - 16px) center,calc(100% - 11px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+  border:1px solid var(--line);border-radius:9px;padding:11px 30px 11px 16px;width:96px;margin:0;cursor:pointer}
+#agg:hover{border-color:var(--sky)}
+#agg:focus{outline:2px solid var(--sky);outline-offset:1px;border-color:transparent}
+#geo{min-width:104px;padding:12px 26px;font-size:14px;font-weight:600;background:rgba(95,176,229,.22);border:1px solid var(--sky);color:#aedcff}
+#geo:hover{background:rgba(95,176,229,.34);color:#cdeaff}
+.go-row{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.go-row label.fld{flex:0 0 110px}
+
+/* status */
+#status{font-size:14px;color:var(--mist);min-height:0;margin:4px 2px 0}
+#status.err{color:var(--strong);background:rgba(242,162,92,.08);border:1px solid rgba(242,162,92,.25);border-radius:9px;padding:11px 13px;line-height:1.5}
+#status.err b{color:var(--frost)}
+
+/* 同名の山 候補リスト */
+.cand{display:flex;flex-direction:column;gap:7px;margin:8px 0 0}
+.cand:empty{margin:0}
+.cand-hint{font-size:12px;color:var(--mist);margin:0 2px 2px}
+.cand-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;cursor:pointer;
+  background:var(--abyss);border:1px solid var(--line);border-radius:9px;padding:10px 13px;font-family:var(--body);color:var(--frost);transition:border-color .15s}
+.cand-btn:hover{border-color:var(--sky)}
+.cand-btn:focus-visible{outline:2px solid var(--sky);outline-offset:1px}
+.cand-btn .cn{font-size:14px;font-weight:600}
+.cand-btn .cm{font-family:var(--mono);font-size:12px;color:var(--mist);white-space:nowrap}
+.cn-badge{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:600;vertical-align:middle;border:1px solid}
+.cn-badge.r1{background:rgba(242,193,78,.18);color:var(--warn);border-color:rgba(242,193,78,.5)}
+.cn-badge.r2{background:rgba(86,197,150,.16);color:var(--calm);border-color:rgba(86,197,150,.45)}
+.cn-badge.r3{background:rgba(95,176,229,.15);color:var(--sky);border-color:rgba(95,176,229,.4)}
+.cn-badge.r0{background:rgba(190,198,210,.16);color:#cdd6e2;border-color:rgba(190,198,210,.45)}
+.cn-badge.r4{background:rgba(167,139,202,.18);color:#c9b1f0;border-color:rgba(167,139,202,.5)}
+.cn-badge.r-web{background:rgba(120,134,150,.16);color:#9fb0c2;border-color:rgba(120,134,150,.45)}
+.cn-alias{font-size:11px;color:var(--mist);font-weight:400}
+
+/* results */
+#results{display:none}
+#results.show{display:block;animation:fade .3s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.meta{display:flex;flex-direction:column;gap:3px}
+.meta .place{font-family:var(--display);font-size:20px;font-weight:600}
+.meta .coords{font-family:var(--mono);font-size:13px;color:var(--mist)}
+.meta .fresh{font-size:12px;color:var(--mist);margin-top:7px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tag{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:20px;background:var(--ridge-2);color:var(--mist);border:1px solid var(--line)}
+.tag.note{color:var(--warn);border-color:rgba(242,193,78,.3)}
+
+/* day tabs */
+.days{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.day-tab{font-family:var(--mono);font-size:13px;padding:9px 14px;border-radius:9px;background:var(--ridge);border:1px solid var(--line);color:var(--mist);cursor:pointer}
+.day-tab.active{background:var(--sky);color:#06121f;border-color:var(--sky);font-weight:600}
+
+/* wind spread signature */
+.spread-row{display:grid;grid-template-columns:54px 1fr 92px;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line)}
+.spread-row:first-of-type{border-top:none}
+.sp-time{font-family:var(--mono);font-size:13px;color:var(--frost)}
+.track{position:relative;height:30px;background:linear-gradient(90deg,var(--abyss),var(--ridge-2));border-radius:6px;overflow:hidden}
+.track .band{position:absolute;top:0;bottom:0;border-radius:4px;opacity:.5}
+.track .tick{position:absolute;top:50%;transform:translate(-50%,-50%);font-family:var(--mono);font-size:9px;color:var(--abyss);font-weight:700;background:var(--frost);border-radius:3px;padding:1px 3px;white-space:nowrap;line-height:1}
+.sp-read{text-align:right;font-family:var(--mono);font-size:12px;line-height:1.35}
+.sp-read .mark{font-size:15px;font-weight:700}
+.sp-read .rng{color:var(--mist);font-size:11px}
+.scale-legend{display:flex;justify-content:flex-end;gap:12px;font-family:var(--mono);font-size:10px;color:var(--mist-dim);margin-top:10px}
+.scale-legend i{font-style:normal}
+.swatch{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:3px;vertical-align:middle}
+
+/* cape */
+.cape-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:520px){.cape-grid{grid-template-columns:1fr}}
+.cape-card{background:var(--abyss);border:1px solid var(--line);border-radius:10px;padding:13px}
+.cape-card .cm{font-family:var(--mono);font-size:11px;color:var(--mist);letter-spacing:.05em}
+.cape-card .cv{font-family:var(--mono);font-size:26px;font-weight:700;margin:2px 0}
+.cape-card .cl{font-size:13px;font-weight:600}
+.cape-card .cd{font-size:12px;color:var(--mist);margin-top:2px}
+.cape-foot{font-size:12px;color:var(--mist);margin-top:12px;line-height:1.5}
+.lvl-tag{font-family:var(--mono);font-size:11px;color:var(--frost);margin:0 0 6px;letter-spacing:.04em}
+.lvl-tag.sub{color:var(--mist)}
+
+/* table */
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:440px}
+th,td{padding:9px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.05em;color:var(--mist);text-transform:uppercase;font-weight:500;text-align:right}
+td:first-child,th:first-child{text-align:left}
+td.band{font-family:var(--display);font-weight:600;color:var(--frost)}
+td.band small{display:block;font-family:var(--mono);font-weight:400;font-size:10px;color:var(--mist-dim)}
+td .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* summary box */
+.sum-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+#summary{
+  font-family:var(--mono);font-size:12.5px;line-height:1.65;
+  background:var(--abyss);border:1px solid var(--line);border-radius:10px;
+  padding:15px;white-space:pre-wrap;color:var(--frost);
+  max-height:340px;overflow:auto;
+}
+.copied{color:var(--calm)!important;border-color:var(--calm)!important}
+
+footer{text-align:center;color:var(--mist-dim);font-size:11px;margin-top:36px;font-family:var(--mono);line-height:1.7}
+footer a{color:var(--mist)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">multi-model ridge weather</p>
+  <h1>⛰ ソナ予報 フェッチャー</h1>
+  <p class="sub">山を指定 → 5モデル（ECMWF / GFS / JMA GSM / MSM / ICON）の稜線気象を取得。判断はソナ（チャット）が組む。</p>
+
+  <!-- INPUT -->
+  <div class="panel">
+    <div class="row">
+      <label class="fld" style="flex:1 1 100%">
+        <span>よく登る山</span>
+        <select id="preset"></select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="fld" style="flex:2 1 200px">
+        <span>または 山名で検索</span>
+        <input id="qname" placeholder="例：鹿島槍ヶ岳" autocomplete="off">
+      </label>
+      <div style="flex:0 0 auto;display:flex;align-items:flex-end">
+        <button class="btn-ghost" id="geo">検索</button>
+      </div>
+    </div>
+    <div class="row">
+      <label class="fld"><span>緯度</span><input id="lat" inputmode="decimal" placeholder="36.3417"></label>
+      <label class="fld"><span>経度</span><input id="lng" inputmode="decimal" placeholder="137.6475"></label>
+      <label class="fld"><span>標高 m</span><input id="elev" inputmode="numeric" placeholder="3180"></label>
+    </div>
+    <div class="go-row">
+      <label class="fld"><span>日数</span>
+        <select id="days">
+          <option value="1">1日</option>
+          <option value="2">2日</option>
+          <option value="3" selected>3日</option>
+          <option value="5">5日</option>
+          <option value="7">7日</option>
+        </select>
+      </label>
+      <button class="btn-go" id="go">予報を取得</button>
+    </div>
+    <div id="cand" class="cand"></div>
+    <p id="status"></p>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+
+    <div class="panel">
+      <div class="meta" id="meta"></div>
+    </div>
+
+    <div class="days" id="days-tabs"></div>
+
+    <div class="panel">
+      <p class="panel-head" id="spread-head">🌬 稜線の風 <span class="hint">山頂高度の面で一致度を見る（バーが狭い＝高確度）</span></p>
+      <div id="spread"></div>
+      <div class="scale-legend">
+        <i><span class="swatch" style="background:var(--sky)"></span>〜8</i>
+        <i><span class="swatch" style="background:var(--calm)"></span>〜15</i>
+        <i><span class="swatch" style="background:var(--warn)"></span>〜20</i>
+        <i><span class="swatch" style="background:var(--strong)"></span>〜25</i>
+        <i><span class="swatch" style="background:var(--alert)"></span>25+</i>
+        <i style="color:var(--mist)">m/s</i>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-head">⛈ 雷：燃料 CAPE と蓋 CIN <span class="hint">CAPE=3モデル午後最大／CIN=GFS日中中央値</span></p>
+      <div class="cape-grid" id="cape"></div>
+      <p class="cape-foot">CAPEは雷の燃料、CINは発雷を抑える蓋（小さいほど薄い）。<b style="color:var(--frost)">CAPE大 × CIN小 × 午後の日射</b>が揃う時が雷の本番。蓋が厚い日はCAPEが高くても持ちやすい。</p>
+    </div>
+
+    <div class="panel">
+      <div class="sum-head">
+        <p class="panel-head" style="margin:0">📊 時間帯別サマリー <span class="hint">選択日・全モデルの幅</span></p>
+        <select id="agg">
+          <option value="median">中央値</option>
+          <option value="max">MAX</option>
+        </select>
+      </div>
+      <div class="tbl-scroll"><table id="tbl"></table></div>
+      <p class="cape-foot">☁️ 雲の低/中/高は高さ帯（低〜3km・中3-8km・高8km〜）。眺望のカギは<b style="color:var(--frost)">低層雲</b>。</p>
+      <p class="cape-foot">🧭 矢印＝風の向かう先（北風↓）・色と大きさ＝強さ。<b style="color:var(--frost)">方位名は逆</b>（＝吹いてくる向き）。</p>
+    </div>
+
+    <div class="panel">
+      <div class="sum-head">
+        <p class="panel-head" style="margin:0">📋 ソナに渡すテキスト</p>
+        <button class="btn-ghost" id="copy">コピー</button>
+      </div>
+      <div id="summary"></div>
+      <p class="cape-foot">これをチャットに貼れば、ソナが時間帯別の眺望・雷・行動可否を判断して予報を組むよ。</p>
+    </div>
+
+  </div>
+
+  <footer>
+    天気データ © <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a>（CC BY 4.0）<br>
+    最終判断は現地の空と自分の経験を一番上に。山小屋・登山道・熊情報も別途確認を。
+  </footer>
+
+</div>
+
+<script>
+"use strict";
+const RH_GAS_FLOOR = 80; // %。山頂面の相対湿度がこれ以上で天気記号をガスへ引き上げ（地形性ガス対策）
+
+const VARS = "temperature_2m,apparent_temperature,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_gusts_10m,wind_speed_925hPa,wind_direction_925hPa,wind_speed_850hPa,wind_direction_850hPa,wind_speed_800hPa,wind_direction_800hPa,wind_speed_700hPa,wind_direction_700hPa,relative_humidity_1000hPa,relative_humidity_925hPa,relative_humidity_800hPa,relative_humidity_700hPa,relative_humidity_850hPa,pressure_msl,cape,weather_code,precipitation,rain,snowfall,freezing_level_height,convective_inhibition";
+const MODELS = [
+  {id:"ecmwf_ifs025", short:"E",  name:"ECMWF"},
+  {id:"gfs_seamless", short:"G",  name:"GFS"},
+  {id:"jma_gsm",      short:"Gs", name:"GSM"},
+  {id:"jma_msm",      short:"M",  name:"MSM"},
+  {id:"icon_seamless",short:"I",  name:"ICON"},
+];
+const CAPE_MODELS = ["gfs_seamless","ecmwf_ifs025","icon_seamless"]; // 雷(CAPE)を返すモデル
+const WIND_SCALE = 30; // m/s, バーの最大目盛
+const PRECIP_RATE_FLOOR = 0.1; // mm/h。時間あたりの降水強度がこれ未満なら「降水なし／曇り」扱い（梅雨の霧雨ノイズ除去）。合計でなく強度で見るのでバンド長(時刻数)に左右されない。天気記号と種別ラベルで共用
+const SNOW_FLOOR = 0.1; // cm。これ未満の降雪は装備判断に影響しない量として無視（雪/霙の判定・雪優勢判定で共用）
+
+// ── 追加機能（2026/6）の定数 ───────────────────────────
+// AOD(エアロゾル光学的厚さ550nm)→「遠望クリア度」のしきい値。雲とは別軸で遠景の霞みを表す。first-passの目安で実地検証で要調整
+const AOD_BANDS = [
+  {max:0.15, emoji:"🔵", label:"クリア",   note:"遠望くっきり"},
+  {max:0.35, emoji:"🟢", label:"良好",     note:"ほぼクリア"},
+  {max:0.60, emoji:"🟡", label:"やや霞み", note:"遠景が白っぽい"},
+  {max:1e9,  emoji:"⚪", label:"白い",     note:"遠望ほぼ不可"},
+];
+const DUST_KOSA   = 80;    // µg/m³。dustがこれ以上で黄砂フラグ（目安）
+const ENS_CAPE_MOD = 1000; // J/kg。不安定の芽（中程度）
+const ENS_CAPE_STR = 2500; // J/kg。強い不安定
+const ENS_PRECIP_MM = 0.1; // mm/h。1時刻でもこれ以上を記録したメンバーを「降水あり」とみなす
+
+// 気圧面メタ：高度の目安とモデル可用数（5モデル体制 E/G/Gs/M/I）。800はECMWF・GSM両方が欠くため3（2026/6 curl実測）、他は5
+const PLEVELS = {
+  "1000":{alt:"約110m",  altShort:"110m",   models:5},
+  "925":{alt:"約800m",   altShort:"800m",   models:5},
+  "850":{alt:"約1,500m", altShort:"1,500m", models:5},
+  "800":{alt:"約1,900m", altShort:"1,900m", models:3},
+  "700":{alt:"約3,000m", altShort:"3,000m", models:5},
+};
+// 標高(m)→主役の気圧面と補助面。狭間(2,500m級)は800と700で挟む(bracket=true)
+function pickLevels(elev){
+  const e=(elev==null||isNaN(elev))?null:elev;
+  if(e==null)   return {main:"700", sub:"800", bracket:false, unknown:true};
+  if(e<1250)    return {main:"925", sub:"850", bracket:false}; // 里山
+  if(e<1750)    return {main:"850", sub:"925", bracket:false}; // 1,500m級（補助は下＝登路925）
+  if(e<2250)    return {main:"800", sub:"850", bracket:false}; // 2,000m級（補助は下＝登路850）
+  if(e<3000)    return {main:"800", sub:"700", bracket:true};  // 2,250〜3,000m＝800と700で山頂を挟む
+  return {main:"700", sub:"800", bracket:false};               // 3,000m級。補助は登路寄りの800
+}
+// 現在の表示で使う面（標高はDEM実標高 DATA.meta.elev 優先、無ければ入力欄）
+function currentLevels(){
+  let elev=(DATA&&DATA.meta&&DATA.meta.elev!=null)?DATA.meta.elev:parseFloat($("#elev").value);
+  return pickLevels(elev);
+}
+
+// 検証済みプリセット（標高はAPIに渡す山頂高度。座標は最寄りで微調整可）
+const PRESETS = [
+  {label:"— 山を選ぶ —", lat:"", lng:"", elev:""},
+  // 後立山連峰（北→南）
+  {label:"白馬岳 (2,932m)",        lat:36.7586, lng:137.7589, elev:2932, rank:1},
+  {label:"唐松岳 (2,696m)",        lat:36.68722, lng:137.75472, elev:2696, rank:3},
+  {label:"鹿島槍ヶ岳 (2,890m)",    lat:36.6228, lng:137.7472, elev:2890, rank:1},
+  // 立山連峰
+  {label:"立山 (3,015m)",    lat:36.5744, lng:137.6194, elev:3015, rank:1},
+  // 北ア南部（表銀座→主稜線→笠）
+  {label:"燕岳 (2,763m)",          lat:36.4061, lng:137.7106, elev:2763, rank:2},
+  {label:"常念岳 (2,857m)",        lat:36.3275, lng:137.7269, elev:2857, rank:1},
+  {label:"槍ヶ岳 (3,180m)",        lat:36.3417, lng:137.6475, elev:3180, rank:1},
+  {label:"奥穂高岳 (3,190m)",      lat:36.2894, lng:137.6479, elev:3190, rank:1},
+  {label:"笠ヶ岳 (2,897m)",        lat:36.31556, lng:137.55028, elev:2897, rank:1},
+  // 頸城 → 八ヶ岳
+  {label:"火打山 (2,462m)",  lat:36.92278, lng:138.06806, elev:2462, rank:1},
+  {label:"妙高山 (2,454m)",  lat:36.8919, lng:138.1133, elev:2454, rank:1},
+  {label:"赤岳（八ヶ岳） (2,899m)",  lat:35.9706, lng:138.3700, elev:2899, rank:1},
+  // 北信（地元の名山）
+  {label:"飯縄山 (1,917m)",        lat:36.73944, lng:138.13361, elev:1917, rank:2},
+  // 北信の里山
+  {label:"雁田山 (759m)",          lat:36.68889, lng:138.33994, elev:759, rank:4},
+  {label:"坂田山 (871m)",          lat:36.64556, lng:138.33833, elev:871, rank:4},
+  {label:"明覚山 (982m)",          lat:36.64833, lng:138.34494, elev:982, rank:4},
+  {label:"尼巌山 (781m)",          lat:36.57278, lng:138.22278, elev:781, rank:4},
+  {label:"奇妙山 (1,099m)",        lat:36.56911, lng:138.2425, elev:1099, rank:4},
+];
+
+const WMO = {0:["☀️","快晴"],1:["🌤️","晴れ"],2:["⛅","薄曇り"],3:["☁️","曇り"],45:["🌫️","霧"],48:["🌫️","着氷霧"],51:["🌦️","霧雨"],53:["🌦️","霧雨"],55:["🌧️","強い霧雨"],56:["🌧️","着氷性霧雨"],57:["🌧️","着氷性霧雨"],61:["🌦️","弱い雨"],63:["🌧️","雨"],65:["☔","強い雨"],66:["🌧️","着氷性の雨"],67:["🌧️","着氷性の雨"],71:["🌨️","弱い雪"],73:["❄️","雪"],75:["❄️","強い雪"],77:["🌨️","霧雪"],80:["🌦️","にわか雨"],81:["🌧️","にわか雨"],82:["☔","激しいにわか雨"],85:["🌨️","にわか雪"],86:["❄️","強いにわか雪"],95:["⛈️","雷雨"],96:["⛈️","雷雨(雹)"],99:["⛈️","激しい雷雨(雹)"]};
+
+// 都道府県（検索入力からの絞り込みヒント判定用）
+const PREFS = ["北海道","青森","岩手","宮城","秋田","山形","福島","茨城","栃木","群馬","埼玉","千葉","東京","神奈川","新潟","富山","石川","福井","山梨","長野","岐阜","静岡","愛知","三重","滋賀","京都","大阪","兵庫","奈良","和歌山","鳥取","島根","岡山","広島","山口","徳島","香川","愛媛","高知","福岡","佐賀","長崎","熊本","大分","宮崎","鹿児島","沖縄"];
+
+/* ===== 山岳バックデータ331座（三百名山301＋主要縦走ピーク25＋北信里山5）／座標は国土地理院DEMで検証済(2026-06) ===== */
+const MEIZAN = [["間ノ岳", 35.6461111, 138.2283333, 1, [], 3190], ["赤石岳", 35.4611111, 138.1572222, 1, [], 3121], ["赤城山", 36.5602777, 139.1933333, 1, [], 1828], ["阿寒岳", 43.3866666, 144.0088888, 1, ["雌阿寒岳", "雄阿寒岳"], 1499], ["朝日岳", 38.2605555, 139.9222222, 1, ["大朝日岳"], 1871], ["浅間山", 36.4063888, 138.5230555, 1, [], 2568], ["四阿山", 36.5416666, 138.4130555, 1, [], 2354], ["阿蘇山", 32.8844444, 131.1038888, 1, [], 1592], ["安達太良山", 37.6211111, 140.2877777, 1, [], 1700], ["吾妻山", 37.7383333, 140.1408333, 1, ["西吾妻山"], 2035], ["雨飾山", 36.9019444, 137.9625, 1, [], 1963], ["天城山", 34.8627777, 139.0016666, 1, [], 1406], ["荒島岳", 35.9341666, 136.6013888, 1, [], 1523], ["飯豊山", 37.8547222, 139.7072222, 1, [], 2105], ["石鎚山", 33.7677777, 133.115, 1, [], 1982], ["伊吹山", 35.4177777, 136.4063888, 1, [], 1377], ["岩木山", 40.6558333, 140.3030555, 1, [], 1625], ["岩手山", 39.8525, 141.0011111, 1, [], 2038], ["空木岳", 35.7188888, 137.8172222, 1, [], 2864], ["美ヶ原", 36.2258333, 138.1075, 1, [], 2034], ["恵那山", 35.4436111, 137.5972222, 1, [], 2191], ["大台ヶ原山", 34.1852777, 136.1091666, 1, [], 1695], ["大峰山", 34.1736111, 135.9075, 1, ["八経ヶ岳"], 1915], ["御嶽山", 35.8927777, 137.4802777, 1, [], 3067], ["開聞岳", 31.18, 130.5283333, 1, [], 924], ["笠ヶ岳", 36.3155555, 137.5502777, 1, ["北アルプス"], 2898], ["鹿島槍ヶ岳", 36.6244444, 137.7469444, 1, [], 2889], ["月山", 38.5488888, 140.0269444, 1, [], 1984], ["北岳", 35.6744444, 138.2388888, 1, [], 3193], ["霧ヶ峰", 36.1030555, 138.1966666, 1, [], 1925], ["霧島山", 31.9341666, 130.8616666, 1, ["韓国岳"], 1700], ["金峰山", 35.8713888, 138.6252777, 1, [], 2599], ["くじゅう連山", 33.0822222, 131.2408333, 1, ["九重山", "久住山"], 1787], ["雲取山", 35.8555555, 138.9438888, 1, [], 2017], ["黒部五郎岳", 36.3925, 137.54, 1, [], 2840], ["甲武信ヶ岳", 35.9088888, 138.7288888, 1, [], 2475], ["駒ヶ岳", 37.0475, 139.3536111, 1, ["会津駒ヶ岳"], 2133], ["駒ヶ岳", 37.1236111, 139.0752777, 1, ["越後駒ヶ岳", "魚沼駒ヶ岳"], 2003], ["駒ヶ岳", 35.7580555, 138.2366666, 1, ["甲斐駒ヶ岳"], 2967], ["駒ヶ岳", 35.7894444, 137.8044444, 1, ["木曽駒ヶ岳"], 2956], ["五龍岳", 36.6583333, 137.7527777, 1, ["五竜岳"], 2814], ["蔵王山", 38.1436111, 140.44, 1, ["熊野岳"], 1841], ["塩見岳", 35.5738888, 138.1830555, 1, [], 3047], ["至仏山", 36.9036111, 139.1733333, 1, [], 2228], ["斜里岳", 43.7655555, 144.7177777, 1, [], 1547], ["白根山", 36.7986111, 139.3758333, 1, ["日光白根山", "奥白根山"], 2578], ["後方羊蹄山", 42.8266666, 140.8113888, 1, ["羊蹄山"], 1898], ["白馬岳", 36.7586111, 137.7586111, 1, [], 2932], ["常念岳", 36.3255555, 137.7275, 1, [], 2857], ["水晶岳", 36.4263888, 137.6027777, 1, [], 2986], ["皇海山", 36.69, 139.3369444, 1, [], 2144], ["仙丈ヶ岳", 35.72, 138.1836111, 1, [], 3033], ["祖母山", 32.8280555, 131.3469444, 1, [], 1756], ["高妻山", 36.8, 138.0519444, 1, [], 2353], ["蓼科山", 36.1036111, 138.295, 1, [], 2531], ["立山", 36.5758333, 137.6197222, 1, ["雄山", "大汝山"], 3015], ["谷川岳", 36.8372222, 138.93, 1, [], 1977], ["丹沢山", 35.4863888, 139.1388888, 1, [], 1673], ["大雪山", 43.6636111, 142.8541666, 1, ["旭岳"], 2291], ["大山", 35.3711111, 133.5461111, 1, ["伯耆大山"], 1729], ["大菩薩嶺", 35.7488888, 138.8455555, 1, ["大菩薩岳"], 2057], ["鳥海山", 39.0991666, 140.0488888, 1, [], 2236], ["筑波山", 36.2252777, 140.1066666, 1, [], 877], ["剣山", 33.8536111, 134.0941666, 1, [], 1955], ["剱岳", 36.6233333, 137.6169444, 1, [], 2999], ["光岳", 35.3380555, 138.0838888, 1, [], 2592], ["十勝岳", 43.4180555, 142.6863888, 1, [], 2077], ["トムラウシ山", 43.5272222, 142.8488888, 1, [], 2141], ["苗場山", 36.8458333, 138.6902777, 1, [], 2145], ["那須岳", 37.1247222, 139.9627777, 1, [], 1915], ["男体山", 36.765, 139.4908333, 1, [], 2486], ["乗鞍岳", 36.1063888, 137.5536111, 1, [], 3026], ["白山", 36.155, 136.7713888, 1, [], 2702], ["八幡平", 39.9577777, 140.8541666, 1, [], 1613], ["八甲田山", 40.6588888, 140.8772222, 1, [], 1585], ["早池峰山", 39.5586111, 141.4886111, 1, [], 1917], ["磐梯山", 37.6008333, 140.0722222, 1, [], 1816], ["燧ヶ岳", 36.955, 139.2852777, 1, [], 2356], ["火打山", 36.9227777, 138.0680555, 1, [], 2462], ["聖岳", 35.4227777, 138.1397222, 1, [], 3013], ["平ヶ岳", 37.0019444, 139.1708333, 1, [], 2141], ["富士山", 35.3608333, 138.7275, 1, [], 3776], ["鳳凰山", 35.7016666, 138.3047222, 1, ["観音岳", "鳳凰三山"], 2841], ["穂高岳", 36.2891666, 137.6480555, 1, ["奥穂高岳"], 3190], ["武尊山", 36.8052777, 139.1325, 1, [], 2158], ["本白根山", 36.6227777, 138.5319444, 1, ["草津白根山"], 2171], ["幌尻岳", 42.7194444, 142.6827777, 1, [], 2052], ["巻機山", 36.9786111, 138.9641666, 1, [], 1967], ["瑞牆山", 35.8933333, 138.5919444, 1, [], 2230], ["宮之浦岳", 30.3361111, 130.5041666, 1, [], 1936], ["妙高山", 36.8913888, 138.1136111, 1, [], 2454], ["薬師岳", 36.4688888, 137.5447222, 1, [], 2926], ["焼岳", 36.2269444, 137.5869444, 1, [], 2455], ["八ヶ岳", 35.9708333, 138.37, 1, ["赤岳"], 2899], ["槍ヶ岳", 36.3419444, 137.6475, 1, [], 3180], ["羅臼岳", 44.0758333, 145.1222222, 1, [], 1661], ["利尻山", 45.1786111, 141.2419444, 1, [], 1721], ["両神山", 36.0233333, 138.8413888, 1, [], 1723], ["鷲羽岳", 36.4030555, 137.6052777, 1, [], 2924], ["悪沢岳", 35.5008333, 138.1825, 1, ["荒川岳", "荒川東岳", "東岳"], 3141], ["会津朝日岳", 37.2211111, 139.3397222, 2, [], 1624], ["赤牛岳", 36.4616666, 137.6033333, 2, [], 2864], ["秋田駒ヶ岳", 39.7611111, 140.7994444, 2, [], 1637], ["浅間隠山", 36.4536111, 138.6525, 2, [], 1757], ["愛鷹山", 35.2380555, 138.7938888, 2, [], 1504], ["芦別岳", 43.2358333, 142.2836111, 2, [], 1726], ["荒沢岳", 37.1005555, 139.1480555, 2, [], 1969], ["荒船山", 36.2038888, 138.6372222, 2, [], 1423], ["有明山", 36.3911111, 137.7705555, 2, [], 2268], ["安平路山", 35.6305555, 137.7744444, 2, [], 2363], ["飯縄山", 36.7394444, 138.1336111, 2, ["飯綱山"], 1917], ["池口岳", 35.3302777, 138.0383333, 2, [], 2392], ["石狩岳", 43.5466666, 143.0222222, 2, [], 1967], ["市房山", 32.3116666, 131.1011111, 2, [], 1721], ["以東岳", 38.3430555, 139.8491666, 2, [], 1772], ["岩菅山", 36.7419444, 138.5594444, 2, [], 2295], ["雲仙岳", 32.76, 130.2922222, 2, [], 1359], ["杁差岳", 37.9425, 139.6088888, 2, [], 1636], ["烏帽子岳", 36.4794444, 137.6508333, 2, ["北アルプス烏帽子岳"], 2628], ["笈ヶ岳", 36.2986111, 136.7922222, 2, [], 1841], ["大崩山", 32.7377777, 131.5130555, 2, [], 1644], ["大岳山", 35.7652777, 139.1302777, 2, [], 1266], ["奥大日岳", 36.5983333, 137.5808333, 2, [], 2611], ["御座山", 36.0338888, 138.6066666, 2, [], 2112], ["尾鈴山", 32.2991666, 131.4266666, 2, [], 1405], ["伯母小岳", 34.0775, 135.6508333, 2, [], 1344], ["御岳", 31.5886111, 130.6547222, 2, [], 1117], ["霞沢岳", 36.2211111, 137.6405555, 2, [], 2646], ["上河内岳", 35.3897222, 138.1527777, 2, [], 2803], ["カムイエクウチカウシ山", 42.625, 142.7663888, 2, [], 1979], ["神室山", 38.9022222, 140.4922222, 2, [], 1365], ["茅ヶ岳", 35.795, 138.5138888, 2, [], 1704], ["餓鬼岳", 36.4472222, 137.7361111, 2, [], 2647], ["経ヶ岳", 35.9127777, 137.8625, 2, ["中央アルプス経ヶ岳"], 2296], ["霧島山", 31.8863888, 130.9188888, 2, ["高千穂峰"], 1574], ["櫛形山", 35.5866666, 138.3691666, 2, [], 2052], ["位山", 36.0383333, 137.1966666, 2, [], 1529], ["栗駒山", 38.9608333, 140.7883333, 2, [], 1626], ["黒姫山", 36.8133333, 138.1272222, 2, [], 2053], ["毛勝山", 36.7011111, 137.5908333, 2, [], 2415], ["毛無山", 35.4158333, 138.5438888, 2, [], 1964], ["乾徳山", 35.8230555, 138.715, 2, [], 2031], ["小秀山", 35.7855555, 137.3969444, 2, [], 1982], ["駒ヶ岳", 42.0633333, 140.6772222, 2, ["北海道駒ヶ岳", "渡島駒ヶ岳"], 1131], ["金剛山", 34.4194444, 135.6730555, 2, [], 1125], ["金剛堂山", 36.3788888, 137.0488888, 2, [], 1650], ["御在所山", 35.0205555, 136.4177777, 2, [], 1212], ["笹ヶ峰", 33.8280555, 133.2747222, 2, [], 1860], ["佐武流山", 36.7722222, 138.6705555, 2, [], 2192], ["三瓶山", 35.1405555, 132.6216666, 2, [], 1126], ["笊ヶ岳", 35.4241666, 138.2594444, 2, [], 2629], ["七面山", 35.3694444, 138.3488888, 2, [], 1989], ["釈迦ヶ岳", 34.1144444, 135.9030555, 2, ["大峰釈迦ヶ岳"], 1800], ["署寒別岳", 43.7158333, 141.5230555, 2, [], 1492], ["白神岳", 40.5075, 140.0183333, 2, [], 1235], ["白砂山", 36.7380555, 138.6933333, 2, [], 2140], ["白石山", 35.8994444, 138.8780555, 2, [], 2036], ["守門岳", 37.3977777, 139.1366666, 2, [], 1537], ["仙ノ倉山", 36.8175, 138.8394444, 2, [], 2026], ["帝釈山", 36.9697222, 139.46, 2, [], 2060], ["樽前山", 42.6905555, 141.3766666, 2, [], 1041], ["大天井岳", 36.365, 137.7011111, 2, [], 2922], ["大日ヶ岳", 36.0013888, 136.8377777, 2, [], 1709], ["大無間山", 35.2561111, 138.1616666, 2, [], 2330], ["燕岳", 36.4069444, 137.7127777, 2, [], 2763], ["天塩岳", 43.9644444, 142.8880555, 2, [], 1558], ["天狗岳", 36.0191666, 138.3555555, 2, [], 2646], ["戸隠山", 36.7702777, 138.055, 2, [], 1904], ["鳥甲山", 36.8391666, 138.5838888, 2, [], 2038], ["中ノ岳", 37.0852777, 139.0775, 2, [], 2085], ["二王子岳", 37.8997222, 139.4991666, 2, [], 1420], ["ニペソツ山", 43.4558333, 143.0322222, 2, [], 2013], ["女峰山", 36.8113888, 139.5363888, 2, [], 2483], ["能郷白山", 35.7625, 136.5141666, 2, [], 1617], ["農鳥岳", 35.6211111, 138.2369444, 2, [], 3026], ["鋸岳", 35.7788888, 138.21, 2, [], 2685], ["八海山", 37.1038888, 139.0247222, 2, [], 1778], ["針ノ木岳", 36.5380555, 137.6844444, 2, [], 2821], ["榛名山", 36.4744444, 138.9005555, 2, [], 1411], ["東赤石山", 33.875, 133.375, 2, [], 1706], ["英彦山", 33.4761111, 130.9261111, 2, [], 1199], ["姫神山", 39.8441666, 141.2469444, 2, [], 1124], ["氷ノ山", 35.3538888, 134.5138888, 2, [], 1510], ["蒜山", 35.325, 133.6633333, 2, [], 1202], ["船形山", 38.4555555, 140.6197222, 2, [], 1500], ["武甲山", 35.9516666, 139.0977777, 2, [], 1304], ["武奈ヶ岳", 35.2647222, 135.8969444, 2, [], 1214], ["ペテガリ岳", 42.4994444, 142.8711111, 2, [], 1736], ["三嶺", 33.8394444, 133.9877777, 2, [], 1894], ["御神楽岳", 37.5219444, 139.4258333, 2, [], 1386], ["御正体山", 35.4869444, 138.9316666, 2, [], 1681], ["三ツ峠山", 35.5491666, 138.8091666, 2, [], 1785], ["南駒ヶ岳", 35.7013888, 137.8108333, 2, [], 2841], ["妙義山", 36.2986111, 138.7488888, 2, [], 1104], ["森吉山", 39.9766666, 140.5441666, 2, [], 1454], ["焼石岳", 39.1636111, 140.8288888, 2, [], 1547], ["夕張岳", 43.0997222, 142.2511111, 2, [], 1668], ["雪倉岳", 36.7947222, 137.7541666, 2, [], 2611], ["由布岳", 33.2822222, 131.3902777, 2, [], 1583], ["和賀岳", 39.5702777, 140.7541666, 2, [], 1439], ["浅草岳", 37.3436111, 139.2336111, 3, [], 1585], ["朝日岳", 36.8805555, 138.9725, 3, ["谷川連峰"], 1945], ["朝日岳", 36.8266666, 137.73, 3, ["白馬連峰"], 2418], ["アサヨ峰", 35.7316666, 138.2413888, 3, [], 2799], ["愛宕山", 35.0602777, 135.6341666, 3, [], 924], ["吾妻山", 35.0680555, 133.0330555, 3, ["中国吾妻山"], 1239], ["荒海山", 37.0361111, 139.6436111, 3, [], 1581], ["粟ヶ岳", 37.5552777, 139.1886111, 3, [], 1293], ["医王山", 36.5127777, 136.7961111, 3, [], 939], ["泉ヶ岳", 38.4119444, 140.7088888, 3, [], 1175], ["一切経山", 37.7352777, 140.2444444, 3, [], 1949], ["伊予富士", 33.7880555, 133.2480555, 3, [], 1756], ["祝瓶山", 38.1975, 139.8797222, 3, [], 1417], ["烏帽子岳", 39.805, 140.8386111, 3, ["乳頭山"], 1478], ["青海黒姫山", 36.9766666, 137.79, 3, [], 1221], ["大笠山", 36.3205555, 136.7897222, 3, [], 1822], ["扇ノ山", 35.4397222, 134.4408333, 3, [], 1310], ["大滝根山", 37.355, 140.7016666, 3, [], 1192], ["大箆柄岳", 31.4861111, 130.8186111, 3, [], 1236], ["大山", 35.4408333, 139.2313888, 3, ["丹沢大山"], 1252], ["奥三界岳", 35.6816666, 137.5072222, 3, [], 1811], ["奥茶臼山", 35.485, 138.0691666, 3, [], 2474], ["男鹿岳", 37.0852777, 139.8219444, 3, [], 1777], ["オプタテシケ山", 43.4702777, 142.7516666, 3, [], 2013], ["川上岳", 36.0083333, 137.1494444, 3, [], 1625], ["笠ヶ岳", 36.6766666, 138.4813888, 3, ["志賀高原"], 2076], ["傾山", 32.8388888, 131.4758333, 3, [], 1605], ["葛城山", 34.4561111, 135.6822222, 3, [], 959], ["神山", 35.2333333, 139.0208333, 3, [], 1438], ["神威岳", 42.4283333, 142.9069444, 3, [], 1600], ["瓶ヶ森", 33.7947222, 133.1933333, 3, [], 1897], ["唐松岳", 36.6872222, 137.7547222, 3, [], 2696], ["狩場山", 42.6133333, 139.9405555, 3, [], 1520], ["冠山", 35.7797222, 136.4094444, 3, [], 1257], ["経ヶ岳", 36.0463888, 136.6219444, 3, ["越前経ヶ岳"], 1625], ["金時山", 35.2897222, 139.005, 3, [], 1212], ["金北山", 38.1038888, 138.3497222, 3, [], 1172], ["国見岳", 32.5472222, 131.0183333, 3, [], 1739], ["熊伏山", 35.2633333, 137.895, 3, [], 1654], ["倶留尊山", 34.5308333, 136.1702777, 3, [], 1037], ["黒岳", 35.5519444, 138.7494444, 3, [], 1793], ["黒法師岳", 35.1961111, 138.0294444, 3, [], 2068], ["鍬崎山", 36.54, 137.4780555, 3, [], 2090], ["景鶴山", 36.9569444, 139.2105555, 3, [], 2004], ["袈裟丸山", 36.6494444, 139.3272222, 3, [], 1961], ["国師ヶ岳", 35.8708333, 138.6730555, 3, [], 2592], ["越百山", 35.6794444, 137.8033333, 3, [], 2614], ["護摩壇山", 34.0575, 135.5669444, 3, [], 1372], ["五葉山", 39.2052777, 141.7322222, 3, [], 1351], ["篠山", 33.0558333, 132.6591666, 3, [], 1065], ["猿ヶ馬場山", 36.2258333, 136.9427777, 3, [], 1875], ["山上ヶ岳", 34.2525, 135.9411111, 3, [], 1719], ["三本杭", 33.1883333, 132.6352777, 3, [], 1226], ["三方岩岳", 36.2588888, 136.8444444, 3, [], 1736], ["釈迦ヶ岳", 36.9, 139.7766666, 3, ["高原山"], 1795], ["白木峰", 36.4155555, 137.1122222, 3, [], 1596], ["爺ヶ岳", 36.5883333, 137.7508333, 3, [], 2670], ["諏訪山", 36.04, 138.7294444, 3, [], 1549], ["背振山", 33.4363888, 130.3686111, 3, [], 1055], ["大船山", 33.095, 131.2805555, 3, [], 1786], ["太平山", 39.7969444, 140.3105555, 3, [], 1170], ["高塚山", 35.1155555, 138.0036111, 3, [], 1621], ["高見山", 34.4286111, 136.0883333, 3, [], 1248], ["多良岳", 32.9755555, 130.0927777, 3, [], 996], ["太郎山", 36.8177777, 139.4827777, 3, [], 2368], ["大千軒岳", 41.5794444, 140.1608333, 3, [], 1072], ["大比叡", 35.0658333, 135.8344444, 3, [], 848], ["大門山", 36.3652777, 136.8036111, 3, [], 1572], ["茶臼岳", 35.3691666, 138.1405555, 3, [], 2604], ["鶴見岳", 33.2866666, 131.4297222, 3, [], 1375], ["道後山", 35.0694444, 133.2327777, 3, [], 1271], ["那岐山", 35.1716666, 134.1802777, 3, [], 1255], ["南木曽岳", 35.5925, 137.6441666, 3, [], 1679], ["七ヶ岳", 37.1241666, 139.6575, 3, [], 1636], ["ニセイカウシュッペ山", 43.78, 142.9852777, 3, [], 1883], ["ニセコアンヌプリ", 42.875, 140.6588888, 3, [], 1308], ["入笠山", 35.8963888, 138.1716666, 3, [], 1955], ["人形山", 36.3488888, 136.9397222, 3, [], 1726], ["野口五郎岳", 36.4327777, 137.6377777, 3, [], 2924], ["野伏ヶ岳", 36.0127777, 136.7325, 3, [], 1674], ["鉢伏山", 36.1630555, 138.0591666, 3, [], 1929], ["鉢盛山", 36.0866666, 137.7547222, 3, [], 2447], ["藤原岳", 35.1586111, 136.4527777, 3, [], 1120], ["二岐山", 37.2463888, 139.9672222, 3, [], 1544], ["蓬莱山", 35.2094444, 135.8858333, 3, [], 1174], ["斑尾山", 36.8375, 138.2744444, 3, [], 1382], ["摩耶山", 38.5202777, 139.7277777, 3, [], 1020], ["三峰山", 34.4486111, 136.2063888, 3, [], 1235], ["三俣蓮華岳", 36.39, 137.5877777, 3, [], 2841], ["三頭山", 35.7391666, 139.0138888, 3, [], 1531], ["焼山", 36.9208333, 138.0358333, 3, [], 2400], ["八溝山", 36.9302777, 140.2730555, 3, [], 1022], ["山伏", 35.3044444, 138.2852777, 3, [], 2013], ["余市岳", 43.0327777, 141.0197222, 3, [], 1488], ["横手山", 36.6688888, 138.5258333, 3, [], 2307], ["米山", 37.2894444, 138.4838888, 3, [], 993], ["竜門岳", 34.4405555, 135.8977777, 3, [], 904], ["蓮華岳", 36.5358333, 137.7105555, 3, [], 2799], ["六甲山", 34.7780555, 135.2636111, 3, [], 931], ["湧蓋山", 33.14, 131.1644444, 3, [], 1500], ["鷲ヶ岳", 35.9402777, 136.9713888, 3, [], 1671], ["北穂高岳", 36.303603, 137.652591, 0, [], 3106], ["前穂高岳", 36.281978, 137.660575, 0, [], 3090], ["涸沢岳", 36.295862, 137.646986, 0, [], 3110], ["西穂高岳", 36.278994, 137.629061, 0, [], 2909], ["大喰岳", 36.335861, 137.646056, 0, [], 3101], ["中岳", 36.329903, 137.64667, 0, [], 3084], ["南岳", 36.319011, 137.650731, 0, [], 3033], ["杓子岳", 36.740579, 137.75934, 0, [], 2812], ["白馬鑓ヶ岳", 36.73161, 137.75478, 0, [], 2903], ["小蓮華山", 36.773676, 137.775855, 0, [], 2766], ["別山", 36.595528, 137.617611, 0, [], 2880], ["宝剣岳", 35.781417, 137.809194, 0, [], 2931], ["三ノ沢岳", 35.76674, 137.79403, 0, [], 2847], ["檜尾岳", 35.751981, 137.813289, 0, [], 2728], ["西農鳥岳", 35.62496, 138.22962, 0, [], 3051], ["小赤石岳", 35.467639, 138.160556, 0, [], 3081], ["荒川中岳", 35.496588, 138.167053, 0, [], 3083], ["荒川前岳", 35.494036, 138.16417, 0, [], 3068], ["兎岳", 35.42861, 138.12111, 0, [], 2818], ["地蔵岳", 35.712, 138.298722, 0, [], 2771], ["横岳", 35.985941, 138.372921, 0, [], 2829], ["硫黄岳", 35.998481, 138.367406, 0, [], 2760], ["阿弥陀岳", 35.972393, 138.358797, 0, [], 2805], ["権現岳", 35.94965, 138.359532, 0, [], 2715], ["編笠山", 35.941697, 138.345056, 0, [], 2524], ["尼巌山", 36.57278, 138.22278, 4, ["尼厳山"], 781], ["奇妙山", 36.56911, 138.2425, 4, [], 1099], ["雁田山", 36.68889, 138.33994, 4, [], 759], ["坂田山", 36.64556, 138.33833, 4, [], 871], ["明覚山", 36.64833, 138.34494, 4, [], 982]];
+function normMt(s){return (s||"").replace(/[ヶヵケが]/g,"ケ").replace(/嶽/g,"岳").replace(/[\s　・･]/g,"").trim();}
+function searchMeizan(q){const nq=normMt(q);if(!nq)return [];
+  const aliHit=m=>(m[4]||[]).some(a=>normMt(a)===nq);
+  const ex=MEIZAN.filter(m=>normMt(m[0])===nq||aliHit(m));if(ex.length)return ex;
+  return MEIZAN.filter(m=>{const n=normMt(m[0]);if(n.includes(nq)||nq.includes(n))return true;
+    return (m[4]||[]).some(a=>{const na=normMt(a);return na.includes(nq)||nq.includes(na);});});}
+function meizanToG(m){return {name:m[0],latitude:m[1],longitude:m[2],elevation:(m[5]!=null?m[5]:null),admin1:null,country:"日本",_meizan:true,rank:m[3],aliases:m[4]||[]};}
+const RANKMETA={0:{label:"主要ピーク",cls:"r0"},1:{label:"百名山",cls:"r1"},2:{label:"二百名山",cls:"r2"},3:{label:"三百名山",cls:"r3"},4:{label:"里山",cls:"r4"}};
+function meizanRank(g){return RANKMETA[g.rank]||RANKMETA[3];}
+// ランク→候補リストと同じ色バッジ（単独ヒット・プリセットのステータス表示にも流用）
+function rankBadge(rank){ const rm=RANKMETA[rank]; return rm?` <span class="cn-badge ${rm.cls}">${rm.label}</span>`:""; }
+// 配列の中央値（CINの日中代表値などに使用。瞬間的な0に引っ張られない）
+function median(arr){ if(!arr||!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); const m=Math.floor(s.length/2); return s.length%2 ? s[m] : (s[m-1]+s[m])/2; }
+let AGG_MODE='median'; // 集計モード 'median'(通常)|'max'(悲観・型A保険＝割れた日に最悪を拾う)
+// 集計の切替ヘルパー。max版は同時刻の最大を返す＝最悪寄りに倒す。中央値版は外れ値に強い
+function agg(arr){ if(!arr||!arr.length) return null; return AGG_MODE==='max'?Math.max(...arr):median(arr); }
+// コピペ文面の併記用：集計モードを一時的に切り替えて関数を評価（テーブルのプルダウン状態に関係なく中央値/MAX両方を出す）
+function withMode(mode, fn){ const prev=AGG_MODE; AGG_MODE=mode; try{ return fn(); } finally{ AGG_MODE=prev; } }
+
+
+let DATA = null;       // 取得した整形済みデータ
+let FOCUS = null;      // 表示中の日付 YYYY-MM-DD
+let EXPECT_ELEV = null; // 選択した山のDB標高。予報取得時のDEM標高と照合して座標の妥当性をチェック
+let SEL = null;        // 選択中の山のメタ {name,rank,aliases,lat,lng,source}。コピペ文面の山名/rank/別名/入力座標・座標照合に使う
+const RANK_PRI = {1:0, 2:1, 3:2, 0:3, 4:4}; // 同名ソートの優先：百>二百>三百>主要ピーク>里山
+let GSI_HSRC = null;   // 国土地理院DEMの解像度（getelevationのhsrc。例 "5m（レーザ）"）。標高ラベルを実解像度で出すため
+
+// ---- helpers ----
+const $ = s => document.querySelector(s);
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const wcode = c => { if(c==null) return "—"; const w=WMO[c]; return w?`${w[0]} ${w[1]}`:`コード${c}`; };
+const wcIcon = c => { const w=(c==null?null:WMO[c]); return w?w[0]:""; };
+// 風向（度）→ 8方位の日本語（吹いてくる向き＝気象の風向名）
+const DIRJP = ["北","北東","東","南東","南","南西","西","北西"];
+const DIRARROW = ["↑","↗","→","↘","↓","↙","←","↖"]; // 吹いていく向きの矢印
+const dirName  = d => (d==null?"":DIRJP[Math.round(d/45)%8]);
+const dirArrow = d => (d==null?"":DIRARROW[Math.round(((d+180)%360)/45)%8]); // 風が向かう先を指す
+// 複数の風向（度）の循環平均。単純平均は350°と10°で破綻するのでベクトル平均
+function avgDir(degs){
+  let sx=0, sy=0, n=0;
+  degs.forEach(d=>{ if(d!=null){ const r=d*Math.PI/180; sx+=Math.sin(r); sy+=Math.cos(r); n++; } });
+  if(!n) return null;
+  let a = Math.atan2(sx,sy)*180/Math.PI;
+  return (a+360)%360;
+}
+// 風速→矢印サイズ(px)。視覚的に強さが分かるよう3段階
+function windArrowSize(v){ if(v==null) return 14; if(v<10) return 15; if(v<20) return 19; return 23; }
+// 時刻 ISO→"4:38"
+const hhmm = iso => { if(!iso) return "—"; const m=String(iso).match(/T(\d{2}):(\d{2})/); return m?`${+m[1]}:${m[2]}`:"—"; };
+// 降水の種類: 雨量(mm)・雪量(cm)・weather_code から
+function precipType(rain, snow, wc, hours){
+  const th = wc!=null && wc>=95, hail = wc===96||wc===99;
+  const rRate = (hours&&hours>0) ? rain/hours : rain;   // 雨の強度 mm/h（バンド長に依存しない）
+  const rainWet = rRate>=PRECIP_RATE_FLOOR;             // ごく弱い霧雨は「降水なし」扱い＝天気記号の丸めと整合。雪は少量でも装備判断に効くので合計で残す
+  if(snow>SNOW_FLOOR && rainWet) return "霙";
+  if(snow>SNOW_FLOOR) return th?"雷雪":"雪";
+  if(rainWet) return hail?"雨+雹":(th?"雷雨":"雨");
+  if(th) return hail?"雷雨(雹)":"雷雨";
+  return "なし";
+}
+// weather_code → 登山者目線の深刻度ランク(0-8)。生コードは順序尺度でない(雪71>雨61など種類差が数値差になる)ため、
+// ランクに変換してから統計処理する。0快晴 1晴れ 2薄曇り 3曇り 4霧 5霧雨 6弱い降水 7しっかり降水 8雷雨。
+// 晴れ↔薄曇り↔曇りを分離（眺望判断の核心）。雨/雪の種別はランクに含めず降水量で別判定。
+function codeToRank(c){
+  if(c==null) return null;
+  if(c>=95) return 8;                                   // 95,96,99 雷雨
+  if(c===0) return 0;                                   // 快晴
+  if(c===1) return 1;                                   // 晴れ
+  if(c===2) return 2;                                   // 薄曇り
+  if(c===3) return 3;                                   // 曇り
+  if(c===45||c===48) return 4;                          // 霧・着氷霧
+  if(c>=51&&c<=57)   return 5;                          // 霧雨系(51,53,55,56,57)
+  if(c===61||c===80||c===71||c===85||c===77) return 6;  // 弱い雨/にわか雨/弱い雪/にわか雪/霧雪
+  return 7;                                             // 63,65,66,67,81,82,73,75,86 しっかり降水
+}
+// ランク → 表示用の代表weather_code。雨/雪はその時間帯の降水種別(isSnow)で出し分ける
+function rankToCode(rank, isSnow){
+  switch(rank){
+    case 0: return 0;            // ☀️快晴
+    case 1: return 1;            // 🌤️晴れ
+    case 2: return 2;            // ⛅薄曇り
+    case 3: return 3;            // ☁️曇り
+    case 4: return 45;           // 🌫️霧
+    case 5: return 53;           // 🌦️霧雨
+    case 6: return isSnow?71:61; // 🌨️弱い雪 / 🌦️弱い雨
+    case 7: return isSnow?73:63; // ❄️雪 / 🌧️雨
+    case 8: return 95;           // ⛈️雷雨
+    default:return 3;
+  }
+}
+// 天気コードの集約(2026/6 改修)：最悪値採用の下振れバイアスを排し、深刻度ランクの「中央値」を主体にする。
+// 補正の優先順位は 雷 ＞ しきい値 ＞ 中央値：
+//  (a)雷=コード95+を2モデル以上が出したら最優先でランク8に上書き(中央値に埋もれさせない安全網)
+//  (b)しきい値=雷でなく中央値が霧雨以上(ランク≧5)でも実降水の強度<0.1mm/hなら曇りに丸め(梅雨の霧雨ノイズ除去)
+// 雨/雪はweather_codeでなく実降水量で判定し、雪コードと雨コードの取り違え事故を防ぐ。
+function worstWeatherCode(idxList){
+  const ranks=[]; let thunderHour=false;                // 同一時刻に2モデル以上が雷を出した時刻が1つでもあれば発雷
+  let precipSum=0, rainSum=0, snowSum=0;
+  idxList.forEach(i=>{
+    let thunderAtI=0;                                    // この時刻に95+を出したモデル数
+    MODELS.forEach(m=>{                                  // ランクは(時刻×モデル)を全部プール
+      const a=DATA.byModel[m.id].weather_code; const v=a?a[i]:null;
+      if(v!=null){ ranks.push(codeToRank(v)); if(v>=95) thunderAtI++; }
+    });
+    if(thunderAtI>=2) thunderHour=true;                  // 同時刻2モデル以上＝発雷判定（別々の時刻に1モデルずつ、では立てない）
+    precipSum += (agg(valsAt("precipitation",i).filter(v=>v!=null))||0); // 各時刻のモデル間中央値を合計(1モデルの微量maxで膨らまない・表示と整合)
+    rainSum   += (agg(valsAt("rain",i).filter(v=>v!=null))||0);
+    snowSum   += (agg(valsAt("snowfall",i).filter(v=>v!=null))||0);
+  });
+  if(!ranks.length) return null;
+  const precipRate = idxList.length ? precipSum/idxList.length : 0; // mm/h相当。バンドの時刻数で割って強度に正規化（早朝7時刻と午前4時刻で同じ意味になる）
+  // ランク中央値（偶数個は安全側に切り上げ＝迷ったら悪いほうへ）
+  const s=ranks.sort((a,b)=>a-b), mid=Math.floor(s.length/2);
+  let rank = (AGG_MODE==='max') ? s[s.length-1]            // 悲観版＝最悪コード(最大ランク)
+           : (s.length%2 ? s[mid] : Math.ceil((s[mid-1]+s[mid])/2)); // 通常＝ランク中央値(偶数は安全側へ)
+  if(thunderHour){ rank=8; }                              // (a)雷を最優先で立てる（同時刻2モデル）
+  else if(rank>=5 && precipRate<PRECIP_RATE_FLOOR){ rank=3; } // (b)弱い霧雨ノイズを曇りに丸め（合計でなく強度mm/hで判定）
+  // (c)湿度補正(常時ON・飯縄2026/6実証)：山頂面が飽和寸前なら低層雲%が低く晴れ判定でもガス側へ。地形性ガスは格子の低層雲%で取りこぼすため相対湿度で補う。集計方式と独立の別レイヤー
+  if(rank<4){
+    const Lh=currentLevels(), rhKey="relative_humidity_"+Lh.main+"hPa";
+    const rhV=[]; idxList.forEach(i=>{ const mv=median(valsAt(rhKey,i).filter(v=>v!=null)); if(mv!=null) rhV.push(mv); });
+    const rhTop=rhV.length?median(rhV):null;
+    if(rhTop!=null && rhTop>=RH_GAS_FLOOR) rank=4;
+  }
+  const isSnow = snowSum>SNOW_FLOOR && snowSum>rainSum;         // 雪量(cm)が雨量(mm)を上回れば雪優勢
+  return rankToCode(rank, isSnow);
+}
+// 雲海/ガス判定: 低層雲・rh700(山頂高度)・rh850(中腹)。山頂が乾けば雲海、湿ればガス
+// 雲海判定用：山頂面→直下(中腹/盆地)面。里山(925主役)は最下層1000hPa(≒110m)を盆地面に取り、放射冷却の冷気湖を拾う
+function midLevelFor(top){ return {"925":"1000","850":"925","800":"850","700":"850"}[top]||"850"; }
+// 雲海/ガス判定: 低層雲・山頂面湿度(rhTop)・中腹面湿度(rhMid)。山頂が乾けば雲海、湿ればガス
+function seaOfClouds(low, rhTop, rhMid, topAlt, midAlt){
+  if(low==null) return null;
+  // ① 山頂が湿る(rh≥RH_GAS_FLOOR=80%)→低層雲が少なくてもガス（梅雨型の取りこぼし防止。低層雲だけで展望良好と即断しない）
+  if(rhTop!=null && rhTop>=RH_GAS_FLOOR)
+    return {label:"ガス(視界不良)", note:`山頂高度(${topAlt})が湿る(湿度${Math.round(rhTop)}%)`, col:"var(--alert)"};
+  // ② 中腹湿り×山頂乾き→雲海
+  if(rhTop!=null && rhTop<70 && rhMid!=null && rhMid>=65)
+    return {label:"雲海の可能性◎", note:`中腹(${midAlt})湿り・山頂高度(${topAlt})は乾き(湿度${Math.round(rhTop)}%)`, col:"var(--sky)"};
+  // ③ 低層雲少なく山頂も乾き→展望良好
+  if(low<40 && (rhTop==null || rhTop<70))
+    return {label:"低い", note:"低層雲少なく山頂も乾き・展望良好", col:"var(--calm)"};
+  // ④ それ以外（山頂rh70-80の中間・低層雲多めなど）
+  return {label:"雲海/ガス微妙", note:`低層雲${Math.round(low)}%・山頂湿度は中間`, col:"var(--warn)"};
+}
+// 気圧トレンド: その日の pressure_msl(全モデル平均) の変化量(hPa)
+function pressureTrend(idxList){
+  const series=idxList.map(i=>{let s=0,n=0;valsAt("pressure_msl",i).forEach(v=>{if(v!=null){s+=v;n++;}});return n?s/n:null;}).filter(v=>v!=null);
+  if(series.length<2) return null;
+  const delta=series[series.length-1]-series[0];
+  if(delta<=-4)   return {delta:delta.toFixed(1), arrow:"↘↘", note:"急降下＝悪化サイン", col:"var(--alert)"};
+  if(delta<=-1.5) return {delta:delta.toFixed(1), arrow:"↘",  note:"下降＝下り坂", col:"var(--warn)"};
+  if(delta<1.5)   return {delta:delta.toFixed(1), arrow:"→",  note:"横ばい＝安定", col:"var(--calm)"};
+  return {delta:"+"+delta.toFixed(1), arrow:"↗", note:"上昇＝回復・安定", col:"var(--sky)"};
+}
+
+function windColor(v){
+  if(v==null) return "var(--mist)";
+  if(v<8)  return "var(--sky)";
+  if(v<15) return "var(--calm)";
+  if(v<20) return "var(--warn)";
+  if(v<25) return "var(--strong)";
+  return "var(--alert)";
+}
+// 低層雲(ガスの指標)の色: 少=展望OK(緑) → 多=ガス濃厚(赤)
+function lowCloudColor(v){
+  if(v==null) return "var(--mist)";
+  if(v<30) return "var(--calm)";
+  if(v<60) return "var(--warn)";
+  return "var(--alert)";
+}
+function agreement(range){
+  if(range==null) return ["—","",  "var(--mist)"];
+  if(range<=3)  return ["◎","一致","var(--calm)"];
+  if(range<=6)  return ["○","ほぼ一致","var(--sky)"];
+  if(range<=10) return ["△","ばらつき","var(--warn)"];
+  return ["✕","割れる","var(--alert)"];
+}
+function capeRead(v){
+  if(v==null) return ["—","データなし","var(--mist)"];
+  if(v<100)  return ["安定","燃料ほぼなし","var(--sky)"];
+  if(v<500)  return ["わずかに不安定","燃料は少し","var(--calm)"];
+  if(v<1000) return ["中程度","引き金あれば雷雨","var(--warn)"];
+  if(v<2500) return ["強い不安定","午後の雷雨に警戒","var(--strong)"];
+  return ["非常に不安定","激しい雷雨の素","var(--alert)"];
+}
+// CIN(対流抑制=蓋)。Open-Meteoは符号がモデル次第なので絶対値=蓋の強さで読む。小さいほど蓋が薄い=発雷しやすい
+function cinRead(v){
+  if(v==null) return ["—","データなし","var(--mist)"];
+  const a=Math.abs(v);
+  if(a<25)  return ["蓋なし","発雷を妨げない","var(--alert)"];
+  if(a<50)  return ["蓋うすい","弱い引き金で発雷","var(--strong)"];
+  if(a<200) return ["蓋あり","強い上昇流が要る","var(--warn)"];
+  return ["蓋つよい","発雷を抑える","var(--calm)"];
+}
+function fmtElev(m){ return Number(m).toLocaleString("ja-JP") + "m"; }
+// 国土地理院DEMの標高ラベル。getelevationのhsrcから実解像度("5m"等)を抜いて厳密に表記（取れなければ"国土地理院DEM"）
+function gsiRes(){ const m=(GSI_HSRC||"").match(/(\d+)\s*m/); return m?(m[1]+"m"):null; }
+function gsiLabel(){ const r=gsiRes(); return r?("国土地理院"+r):"国土地理院DEM"; }
+
+// ---- init ----
+function applyPreset(){
+  const sel=$("#preset"); const p=PRESETS[sel.value];
+  if(p && p.lat!==""){
+    $("#lat").value=p.lat; $("#lng").value=p.lng; $("#elev").value=""; $("#qname").value=""; EXPECT_ELEV=p.elev;
+    clearCand();
+    const nm=p.label.split(" (")[0];
+    const meiz=MEIZAN.find(x=>normMt(x[0])===normMt(nm)); // DBに同名があれば別名/rankを補完（検索ピックと表示を揃える）
+    SEL={name:nm, rank:(p.rank!=null?p.rank:(meiz?meiz[3]:null)), aliases:(meiz&&meiz[4])?meiz[4]:[], lat:p.lat, lng:p.lng, source:"preset"};
+    setStatus(`📍 ${nm}${rankBadge(p.rank)} 登録標高${fmtElev(p.elev)}をセット。予報取得時にDEM標高と照合するよ。`,false);
+  }
+}
+function initPresets(){
+  const sel = $("#preset");
+  PRESETS.forEach((p,i)=>{
+    const o=document.createElement("option");
+    o.value=i; o.textContent=p.label; sel.appendChild(o);
+  });
+  sel.addEventListener("change", applyPreset);
+}
+
+// ---- geocoding ----
+// 外部ジオコーダ（すべてfail-soft：CORS/エラーは空配列にして連鎖を止めない）。返り値は共通形に正規化。
+function isPeakish(g){ return /^(MT|PK|VLC|HLL|MTS|PKS)/.test(g.feature_code||""); }
+// タイムアウト付きfetch（応答しない/遅いジオコーダで検索が固まらないよう6秒でabort→catch側で空配列に落ちる）
+async function fetchT(url, ms){
+  const c=new AbortController(); const t=setTimeout(()=>c.abort(), ms||6000);
+  try{ return await fetch(url, {signal:c.signal}); } finally{ clearTimeout(t); }
+}
+// OSM/Nominatim：日本のマイナー山(natural=peak)に強い。山頂ノードはeleを持つのでDEM照合が効く
+async function geoOSM(q){
+  try{
+    const u=`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=jsonv2&countrycodes=jp&limit=8&extratags=1&accept-language=ja`;
+    const r=await fetchT(u); if(!r.ok) return [];
+    const j=await r.json();
+    return (j||[]).map(x=>{
+      let fc="";
+      if(x.category==="natural"){ fc=(x.type==="peak")?"MT":(x.type==="volcano")?"VLC":(x.type==="hill")?"HLL":"MT"; }
+      else if(x.category==="place"){ fc="PPL"; }
+      const eRaw=(x.extratags&&x.extratags.ele!=null)?parseFloat(x.extratags.ele):NaN;
+      const nm=(x.name||(x.display_name||"").split(",")[0]||q).trim();
+      return {name:nm, latitude:parseFloat(x.lat), longitude:parseFloat(x.lon),
+              elevation:isNaN(eRaw)?null:Math.round(eRaw), admin1:null, country:"日本", feature_code:fc, _src:"OSM"};
+    }).filter(g=>!isNaN(g.latitude)&&!isNaN(g.longitude));
+  }catch(e){ return []; }
+}
+// 国土地理院 地理院地図検索：日本の自然地名(山名ラベル)を返す公式ソース。eleは無し（座標はGSI DEMで裏取り）
+async function geoGSI(q){
+  try{
+    const u=`https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(q)}`;
+    const r=await fetchT(u); if(!r.ok) return [];
+    const j=await r.json();
+    return (j||[]).filter(x=>x.geometry&&x.geometry.coordinates).map(x=>({
+      name:((x.properties&&x.properties.title)||q).trim(),
+      latitude:parseFloat(x.geometry.coordinates[1]), longitude:parseFloat(x.geometry.coordinates[0]),
+      elevation:null, admin1:null, country:"日本", feature_code:"", _src:"GSI"
+    })).filter(g=>!isNaN(g.latitude)&&!isNaN(g.longitude))
+       .filter(g=> g.name.indexOf(q)>=0 || /[岳山峰嶽森塚]$/.test(g.name))
+       .slice(0,5);
+  }catch(e){ return []; }
+}
+// Open-Meteo ジオコーダ（従来の最後の砦。穴は多いが僧ヶ岳など拾えるものもある）
+async function geoOM(q){
+  try{
+    const u=`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=ja&format=json`;
+    const r=await fetchT(u); if(!r.ok) return [];
+    const j=await r.json();
+    return (j.results||[]).map(x=>({name:x.name, latitude:x.latitude, longitude:x.longitude,
+      elevation:(x.elevation!=null?x.elevation:null), admin1:x.admin1||null, country:x.country||"日本",
+      feature_code:x.feature_code||"", _src:"OM"}));
+  }catch(e){ return []; }
+}
+
+async function geocode(){
+  const raw=$("#qname").value.trim();
+  if(!raw){ setStatus("山名を入れてね",false); clearCand(); return; }
+  // 入力をパース：県ヒント・標高ヒント・山名（APIには山名だけ送る）
+  const prefHint = PREFS.find(p=>raw.includes(p)) || null;
+  const elevMatch = raw.match(/(\d{3,4})\s*m?/);
+  const elevHint = elevMatch ? parseInt(elevMatch[1],10) : null;
+  let nameQ = raw;
+  if(prefHint) nameQ = nameQ.replace(new RegExp(prefHint+"[県府]?","g"),"");
+  if(elevMatch) nameQ = nameQ.replace(elevMatch[0],"");
+  nameQ = nameQ.replace(/[\s,、　]+/g,"").trim();
+  if(!nameQ){ setStatus("山名も入れてね（例：笠ヶ岳 長野／笠ヶ岳 2898）",true); clearCand(); return; }
+
+  setStatus("検索中…",false); clearCand();
+  // 山岳バックデータDBを最優先（山頂座標が検証済みで正確）
+  const meizanHits = searchMeizan(nameQ).map(meizanToG);
+  // web結果のスコア：DBは別格、山(MT/PK/VLC)は加点・居住地(PPL)は減点、県/標高ヒントで加点
+  const scoreOf=(g)=>{
+    let s = g._meizan ? 1000 : 0;
+    if(!g._meizan){
+      const fc=g.feature_code||"";
+      if(/^(MT|PK|VLC)/.test(fc)) s+=40;            // 山・峰・火山を上に
+      else if(/^(HLL|RDGE|UPLD|MTS|PKS)/.test(fc)) s+=20; // 丘・尾根
+      else if(/^PPL/.test(fc)) s-=20;               // 同名の町・集落は下げる
+    }
+    if(prefHint && g.admin1 && g.admin1.includes(prefHint)) s+=100;
+    if(elevHint!=null && g.elevation!=null) s+=Math.max(0, 60-Math.abs(g.elevation-elevHint)/15);
+    return s;
+  };
+  // 同点（≒DB同名群）はrank優先→標高降順で「人気・高峰」を上に並べる
+  const cmp=(a,b)=>{
+    const ds=scoreOf(b)-scoreOf(a); if(ds) return ds;
+    const ra=a._meizan?(RANK_PRI[a.rank]==null?9:RANK_PRI[a.rank]):9;
+    const rb=b._meizan?(RANK_PRI[b.rank]==null?9:RANK_PRI[b.rank]):9;
+    if(ra!==rb) return ra-rb;
+    const ea=(a.elevation==null?-1:a.elevation), eb=(b.elevation==null?-1:b.elevation);
+    return eb-ea;
+  };
+  try{
+    // 3ジオコーダを並列で叩く（各fail-soft）：OSM=マイナー山に強い / 地理院=公式 / Open-Meteo=最後の砦
+    const [osmR, gsiR, omR] = await Promise.all([geoOSM(nameQ), geoGSI(nameQ), geoOM(nameQ)]);
+    let osm=osmR; { const p=osm.filter(isPeakish); if(p.length) osm=p; } // 山っぽいものがあればそれを優先（同名の町を除く）
+    const near=(a,b,th)=>Math.abs(a.latitude-b.latitude)<th && Math.abs(a.longitude-b.longitude)<th;
+    // DB(gold)と近いweb結果は重複として捨てる（DBの正確な山頂座標を優先）
+    let web=[...osm, ...gsiR, ...omR].filter(g=>!meizanHits.some(m=>near(m,g,0.05)));
+    // web同士の重複もまとめる（concat順＝OSM>地理院>Open-Meteoの優先で先勝ち）
+    const dd=[]; web.forEach(g=>{ if(!dd.some(d=>near(d,g,0.02))) dd.push(g); }); web=dd;
+    let results=[...meizanHits, ...web].sort(cmp);
+    if(!results.length){ setStatus(`「${nameQ}」が見つからなかった。緯度経度を手で入れてみて（バックデータ外＋ジオコーダ未収録の可能性）。`,true); return; }
+    if(results.length===1){ pickCand(results[0]); return; }
+    setStatus("",false);
+    renderCand(results, prefHint, elevHint);
+  }catch(e){
+    // 想定外エラー：DBヒットだけでも出す
+    if(meizanHits.length===1){ pickCand(meizanHits[0]); return; }
+    if(meizanHits.length){ setStatus("",false); renderCand(meizanHits, prefHint, elevHint); return; }
+    setStatus(`検索に失敗。緯度経度を手入力すれば取得できるよ。<br><span style="opacity:.6">${e.message}</span>`,true);
+  }
+}
+
+// 候補の絞り込み・選択
+function clearCand(){ $("#cand").innerHTML=""; }
+
+function candPlace(g){
+  return [g.admin1, (g.country && g.country!=="日本") ? g.country : null].filter(Boolean).join(" · ");
+}
+
+function renderCand(list, prefHint, elevHint){
+  const w=$("#cand");
+  const hintBits=[prefHint, elevHint!=null ? elevHint+"m" : null].filter(Boolean).join(" / ");
+  const hint = hintBits ? `（${hintBits} に近いものを上に並べたよ）` : "";
+  let html=`<p class="cand-hint">${list.length}件ヒット、どれ？${hint}</p>`;
+  list.forEach((g,i)=>{
+    let badge, right;
+    if(g._meizan){
+      const rm=meizanRank(g);
+      badge=`<span class="cn-badge ${rm.cls}">${rm.label}</span>`;
+      right=`${g.elevation!=null?fmtElev(Math.round(g.elevation))+" · ":""}${g.latitude.toFixed(3)}, ${g.longitude.toFixed(3)}`;
+    }else{
+      const srcN = g._src==="OSM"?"OSM" : g._src==="GSI"?"地理院地図" : g._src==="OM"?"Open-Meteo" : "web";
+      badge=`<span class="cn-badge r-web">${srcN}</span>`;
+      const pl=candPlace(g);
+      const el=g.elevation!=null ? fmtElev(Math.round(g.elevation)) : "標高—";
+      right=`${[pl,el].filter(Boolean).join(" · ")} · ${g.latitude.toFixed(3)}, ${g.longitude.toFixed(3)}`;
+    }
+    const aliTxt=(g._meizan && g.aliases && g.aliases.length)?`<span class="cn-alias">／${g.aliases[0]}</span>`:"";
+    html+=`<button class="cand-btn" data-i="${i}"><span class="cn">${g.name}${aliTxt}${badge}</span><span class="cm">${right}</span></button>`;
+  });
+  w.innerHTML=html;
+  [...w.querySelectorAll(".cand-btn")].forEach(b=>{ b.onclick=()=>pickCand(list[+b.dataset.i]); });
+}
+
+function pickCand(g){
+  $("#lat").value=g.latitude; $("#lng").value=g.longitude;
+  $("#preset").value=0;
+  clearCand();
+  if(g._meizan){
+    $("#elev").value="";            // 空にしてDEM標高を取得→DB標高と照合
+    EXPECT_ELEV=g.elevation;
+    SEL={name:g.name, rank:g.rank, aliases:g.aliases||[], lat:g.latitude, lng:g.longitude, source:"meizan"};
+    setStatus(`📍 ${g.name}${rankBadge(g.rank)} 登録標高${g.elevation!=null?fmtElev(Math.round(g.elevation)):"—"}をセット。予報取得時にDEM標高と照合するよ。`,false);
+  }else{
+    $("#elev").value="";            // 空にして国土地理院DEMの実標高を取得（GeoNamesの粗い標高より正確）
+    // OSMの山頂ノードはeleが信頼でき座標も山頂なのでDEM照合を効かせる。地理院/Open-Meteoは照合オフ
+    EXPECT_ELEV=(g._src==="OSM" && g.elevation!=null) ? g.elevation : null;
+    SEL={name:g.name, rank:null, aliases:[], lat:g.latitude, lng:g.longitude, source:(g._src||"web")};
+    const srcN = g._src==="OSM"?"OSM" : g._src==="GSI"?"地理院地図" : g._src==="OM"?"Open-Meteo" : "web";
+    const elTxt = g.elevation!=null?`参考標高${fmtElev(Math.round(g.elevation))}`:"標高は国土地理院DEMで取得";
+    const tail = EXPECT_ELEV!=null ? "予報取得時にDEM標高で座標照合するよ。" : "取得時に国土地理院DEMで気温補正。座標が山頂とズレてたら手で直してね。";
+    setStatus(`📍 ${g.name}（${srcN}・${elTxt}）をセット。${tail}`,false);
+  }
+}
+
+// ---- fetch forecast ----
+// 検索/手入力時：5モデル各単独の最寄り格子を取り、入力座標に一番近い格子を代表として返す
+// （バックデータは精査済み座標を使うので呼ばない。山ごとに最寄りモデルが変わるため毎回実測する）
+async function pickNearestGrid(lat,lng){
+  const cands=[];
+  await Promise.all(MODELS.map(async mo=>{
+    try{
+      const u=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m&models=${mo.id}&timezone=Asia%2FTokyo&forecast_days=1`;
+      const r=await fetch(u); if(!r.ok) return;
+      const j=await r.json();
+      if(j.latitude==null||j.longitude==null) return;
+      const km=Math.hypot((j.latitude-lat)*111,(j.longitude-lng)*111*Math.cos(lat*Math.PI/180));
+      cands.push({name:mo.name, lat:j.latitude, lng:j.longitude, km});
+    }catch(e){}
+  }));
+  if(!cands.length) return null;
+  cands.sort((a,b)=>a.km-b.km);
+  return cands[0]; // {name,lat,lng,km}
+}
+async function fetchForecast(){
+  const lat=parseFloat($("#lat").value), lng=parseFloat($("#lng").value);
+  let elev=parseFloat($("#elev").value);
+  const manualElev=!isNaN(elev);          // 手入力された標高は尊重する（GSIで上書きしない）
+  const days=$("#days").value;
+  if(isNaN(lat)||isNaN(lng)){ setStatus("緯度・経度を入れてね（山を選ぶか検索でもOK）",true); return; }
+
+  const btn=$("#go"); btn.disabled=true; btn.textContent="取得中…";
+  setStatus("5モデル取得中…",false);
+  try{
+    // 手入力が無ければ国土地理院DEMの実標高(5m/10m)を取り、forecastの&elevation=に注入（山頂の気温・体感の補正を精緻化）
+    let gsiElev=null;
+    if(!manualElev){ gsiElev=await gsiElevation(lat,lng); if(gsiElev!=null) elev=gsiElev; }
+    const elevPart = isNaN(elev) ? "" : `&elevation=${Math.round(elev)}`;
+    const u=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}${elevPart}&hourly=${VARS}&daily=sunrise,sunset&models=${MODELS.map(m=>m.id).join(",")}&timezone=Asia%2FTokyo&wind_speed_unit=ms&forecast_days=${days}`;
+    const r=await fetch(u);
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j=await r.json();
+    DATA=shape(j);
+    DATA.gsiElev=gsiElev;
+    DATA.elevSrc = manualElev ? "手入力" : (gsiElev!=null ? gsiLabel() : "Open-Meteo DEM");
+    // バックデータ(preset/meizan)は精査済み山頂座標を代表に。検索/手入力は座標が不確実なので5モデルで最寄り格子を実測して代表にする
+    DATA.nearestGrid = (SEL && (SEL.source==="preset"||SEL.source==="meizan")) ? null : await pickNearestGrid(lat,lng);
+    FOCUS=DATA.dates[0];
+    // 追加データ（fail-soft：エラーでもnullになるだけで本体予報は完走。ステータスは「5モデル取得中…」のまま）
+    DATA.ens = await fetchEnsemble(lat,lng,days, isNaN(elev)?null:elev);
+    DATA.aq  = await fetchAirQuality(lat,lng,days);
+    renderAll();
+    setStatus("",false);
+  }catch(e){
+    setStatus(`<b>取得できなかった。</b> プレビュー画面はネット制限があるかも。ローカルか GitHub Pages で開くと動くよ。<br><span style="opacity:.6">${e.message}</span>`,true);
+  }finally{ btn.disabled=false; btn.textContent="予報を取得"; }
+}
+
+function shape(j){
+  const h=j.hourly||{};
+  const times=h.time||[];
+  const byModel={};
+  MODELS.forEach(m=>{
+    byModel[m.id]={};
+    VARS.split(",").forEach(v=> byModel[m.id][v]=h[`${v}_${m.id}`]||null);
+  });
+  // daily(日の出/日の入)はモデル非依存。モデル別キー→共通キーの順でフォールバック
+  const dy=j.daily||{};
+  const pick=(base,i)=>{ for(const m of MODELS){const a=dy[`${base}_${m.id}`]; if(a&&a[i]!=null)return a[i];} return (dy[base]||[])[i]; };
+  const daily={};
+  (dy.time||[]).forEach((d,i)=>{ daily[d]={sunrise:pick("sunrise",i), sunset:pick("sunset",i)}; });
+  const dates=[...new Set(times.map(t=>t.slice(0,10)))];
+  return {
+    meta:{lat:j.latitude, lng:j.longitude, elev:j.elevation, gen:j.generationtime_ms, tz:j.timezone, fetched:new Date()},
+    times, byModel, dates, daily
+  };
+}
+
+// index of a given hour on the focus date
+function idxAt(date,hour){
+  const target=`${date}T${String(hour).padStart(2,"0")}:00`;
+  return DATA.times.indexOf(target);
+}
+// indices for a band [h0,h1) on focus date
+function bandIdx(date,h0,h1){
+  const out=[];
+  for(let h=h0;h<h1;h++){ const i=idxAt(date,h); if(i>=0) out.push(i); }
+  return out;
+}
+function valsAt(varName, i){
+  return MODELS.map(m=>{ const a=DATA.byModel[m.id][varName]; return a?a[i]:null; });
+}
+
+// ============ 追加データ：GSI標高・アンサンブル確率・AOD遠望（すべてfail-soft：落ちても本体は完走）============
+// 国土地理院DEM(1mレーザ)。山頂の実標高→forecastの&elevation=に注入し気温補正を精緻化。日本国外/海上/範囲外はnull（CORS *・確認済み）
+async function gsiElevation(lat,lng){
+  GSI_HSRC=null;
+  try{
+    const u=`https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=${lng}&lat=${lat}&outtype=JSON`;
+    const r=await fetch(u); if(!r.ok) return null;
+    const j=await r.json(); const e=parseFloat(j.elevation);
+    if(!(isFinite(e) && e>-500)) return null;   // -9999/海上/範囲外を除外
+    GSI_HSRC=(typeof j.hsrc==="string")?j.hsrc:null;   // 実解像度を控える（例 "5m（レーザ）"）
+    return e;
+  }catch(_){ return null; }
+}
+// アンサンブル：GFS(31)+ECMWF(51)=計82メンバー。CAPE・降水・気温・低層雲・各面の風を確率化（800hPa風は欠測＝実測確認済み）
+async function fetchEnsemble(lat,lng,days,elev){
+  try{
+    const vs="cape,precipitation,temperature_2m,cloud_cover_low,wind_speed_925hPa,wind_speed_850hPa,wind_speed_700hPa";
+    const elevPart=(elev!=null&&isFinite(elev))?`&elevation=${Math.round(elev)}`:"";  // 気温の標高補正をGSI標高と揃える
+    const u=`https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${lat}&longitude=${lng}${elevPart}&hourly=${vs}&models=gfs_seamless,ecmwf_ifs025&timezone=Asia%2FTokyo&forecast_days=${days}`;
+    const r=await fetch(u); if(!r.ok) return null;
+    const j=await r.json(); const h=j.hourly||{};
+    // メンバーキーは cape_member01_ncep_gefs_seamless 等（番号が真ん中・モデルID可変）。baseで始まる「値の入った」配列を全部=全メンバーとして拾う
+    const grab=base=>Object.keys(h).filter(k=>(k===base||k.startsWith(base+"_"))&&Array.isArray(h[k])&&h[k].some(v=>v!=null)).map(k=>h[k]);
+    const cape=grab("cape"), precip=grab("precipitation"), temp=grab("temperature_2m"), cloudLow=grab("cloud_cover_low");
+    const wind={ "925":grab("wind_speed_925hPa"), "850":grab("wind_speed_850hPa"), "700":grab("wind_speed_700hPa") };
+    if(!cape.length && !precip.length && !temp.length) return null;
+    return { times:h.time||[], cape, precip, temp, cloudLow, wind };
+  }catch(_){ return null; }
+}
+// 大気質：AOD(遠望の霞み)・dust(黄砂)
+async function fetchAirQuality(lat,lng,days){
+  try{
+    const u=`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lng}&hourly=aerosol_optical_depth,dust&timezone=Asia%2FTokyo&forecast_days=${days}`;
+    const r=await fetch(u); if(!r.ok) return null;
+    const j=await r.json(); const h=j.hourly||{};
+    if(!Array.isArray(h.aerosol_optical_depth)) return null;
+    return { times:h.time||[], aod:h.aerosol_optical_depth||[], dust:h.dust||[] };
+  }catch(_){ return null; }
+}
+// 時刻→補助データ配列のインデックス（タイムスタンプ一致。メイン予報と日数がズレても安全）
+function auxIdx(times,date,hour){ if(!times) return -1; return times.indexOf(`${date}T${String(hour).padStart(2,"0")}:00`); }
+// バンド[h0,h1)のアンサンブル確率。CAPE=各メンバーのバンド内ピークがthr以上の割合
+function ensCapeProb(date,h0,h1,thr){
+  if(!DATA.ens||!DATA.ens.cape.length) return null;
+  const idx=[]; for(let h=h0;h<h1;h++){const i=auxIdx(DATA.ens.times,date,h); if(i>=0)idx.push(i);} if(!idx.length) return null;
+  let hit=0,tot=0;
+  DATA.ens.cape.forEach(arr=>{ let peak=null; idx.forEach(i=>{const v=arr[i]; if(v!=null)peak=(peak==null?v:Math.max(peak,v));}); if(peak!=null){tot++; if(peak>=thr)hit++;} });
+  return tot? Math.round(100*hit/tot):null;
+}
+// 降水=各メンバーがバンド内に≥ENS_PRECIP_MMを1時刻でも持つ割合（PoP的）
+function ensPrecipProb(date,h0,h1){
+  if(!DATA.ens||!DATA.ens.precip.length) return null;
+  const idx=[]; for(let h=h0;h<h1;h++){const i=auxIdx(DATA.ens.times,date,h); if(i>=0)idx.push(i);} if(!idx.length) return null;
+  let hit=0,tot=0;
+  DATA.ens.precip.forEach(arr=>{ let any=false,seen=false; idx.forEach(i=>{const v=arr[i]; if(v!=null){seen=true; if(v>=ENS_PRECIP_MM)any=true;}}); if(seen){tot++; if(any)hit++;} });
+  return tot? Math.round(100*hit/tot):null;
+}
+function ensCount(){ return DATA.ens? (DATA.ens.cape.length||DATA.ens.precip.length) : 0; }
+// AOD値→遠望クリア度バンド
+function aodBand(v){ if(v==null) return null; for(const b of AOD_BANDS){ if(v<=b.max) return b; } return AOD_BANDS[AOD_BANDS.length-1]; }
+// バンドのAOD代表値(中央値)とdust最大
+function aqBand(date,h0,h1){
+  if(!DATA.aq) return null;
+  const aods=[],dusts=[];
+  for(let h=h0;h<h1;h++){ const i=auxIdx(DATA.aq.times,date,h); if(i<0)continue; const a=DATA.aq.aod[i],d=DATA.aq.dust[i]; if(a!=null)aods.push(a); if(d!=null)dusts.push(d); }
+  if(!aods.length) return null;
+  return { aod:median(aods), dust:dusts.length?Math.max(...dusts):null };
+}
+// パーセンタイル（線形補間）
+function pct(arr,p){ if(!arr||!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); const idx=(s.length-1)*p/100, lo=Math.floor(idx), hi=Math.ceil(idx); return lo===hi? s[lo] : s[lo]+(s[hi]-s[lo])*(idx-lo); }
+// 連続変数のばらつき：各メンバーのバンド代表値(reducer)→メンバー横断のp10/p50/p90
+function ensVarBand(members,date,h0,h1,reducer){
+  if(!members||!members.length||!DATA.ens) return null;
+  const idx=[]; for(let h=h0;h<h1;h++){const i=auxIdx(DATA.ens.times,date,h); if(i>=0)idx.push(i);} if(!idx.length) return null;
+  const per=[]; members.forEach(arr=>{ const v=idx.map(i=>arr[i]).filter(x=>x!=null); if(v.length) per.push(reducer(v)); });
+  if(!per.length) return null;
+  return { p10:pct(per,10), p50:pct(per,50), p90:pct(per,90), n:per.length };
+}
+// 風の閾値到達率：各メンバーのバンド内ピークがthr以上の割合
+function ensWindExceed(members,date,h0,h1,thr){
+  if(!members||!members.length||!DATA.ens) return null;
+  const idx=[]; for(let h=h0;h<h1;h++){const i=auxIdx(DATA.ens.times,date,h); if(i>=0)idx.push(i);} if(!idx.length) return null;
+  let hit=0,tot=0; members.forEach(arr=>{ const v=idx.map(i=>arr[i]).filter(x=>x!=null); if(v.length){tot++; if(Math.max(...v)>=thr)hit++;} });
+  return tot? Math.round(100*hit/tot):null;
+}
+// 主役面の風メンバー（800hPaは欠測なので主役→補助→850→700の順でフォールバック）
+function ensWindMembers(){
+  if(!DATA.ens||!DATA.ens.wind) return null;
+  const L=currentLevels();
+  for(const lv of [L.main,L.sub,"850","700"]){ const a=DATA.ens.wind[lv]; if(a&&a.length) return {level:lv, members:a}; }
+  return null;
+}
+
+// ---- render ----
+// DEM実標高 vs 登録(期待)標高の照合結果。画面メタとコピペ文面で共用（150m差で⚠＝座標が山頂を外してる疑い）
+function demVerdict(){
+  if(EXPECT_ELEV==null || !DATA || DATA.meta.elev==null) return null;
+  const elev=Math.round(DATA.meta.elev);
+  const diff=Math.round(Math.abs(DATA.meta.elev-EXPECT_ELEV));
+  const srcLbl=(DATA.gsiElev!=null)?(gsiLabel()+"実標高"):"実標高(DEM)";
+  const ok=diff<=150;
+  return { ok, diff, elev, srcLbl,
+    okText:`✓ 標高照合OK（${srcLbl}${fmtElev(elev)}≒登録${fmtElev(EXPECT_ELEV)}）`,
+    ngText:`⚠ 座標要確認（${srcLbl}${fmtElev(elev)} vs 登録${fmtElev(EXPECT_ELEV)}＝${fmtElev(diff)}差）` };
+}
+// 画面・コピペ共通の代表座標。バックデータ(preset/meizan)=精査済み山頂座標、検索/手入力=5モデルで最寄りの格子（無ければトップレベル格子にフォールバック）
+function repCoord(){
+  const inLat=parseFloat($("#lat").value), inLng=parseFloat($("#lng").value);
+  const isBack = SEL && (SEL.source==="preset"||SEL.source==="meizan");
+  if(isBack && !isNaN(inLat) && !isNaN(inLng))
+    return {lat:inLat, lng:inLng, summit:true, km:0, model:null};
+  const ng = DATA && DATA.nearestGrid;
+  if(ng) return {lat:ng.lat, lng:ng.lng, summit:false, km:ng.km, model:ng.name};
+  const m=DATA.meta;
+  const km=(!isNaN(inLat)&&!isNaN(inLng))?Math.hypot((m.lat-inLat)*111,(m.lng-inLng)*111*Math.cos(inLat*Math.PI/180)):null;
+  return {lat:m.lat, lng:m.lng, summit:false, km, model:null};
+}
+function renderAll(){ renderMeta(); renderDays(); renderFocus(); $("#results").classList.add("show"); }
+
+function renderMeta(){
+  const m=DATA.meta;
+  const rc=repCoord();
+  const f=m.fetched;
+  const hh=String(f.getHours()).padStart(2,"0"), mm=String(f.getMinutes()).padStart(2,"0");
+  const placeSel=PRESETS[$("#preset").value];
+  const place=(placeSel && placeSel.lat!=="")?placeSel.label.split(" (")[0]:($("#qname").value.trim()||"指定地点");
+  const sun=(DATA.daily&&DATA.daily[FOCUS])?DATA.daily[FOCUS]:null;
+  // DEM標高(この座標の実標高) vs 登録DB標高 の照合 ＝ 座標が山頂を指してるかのチェック
+  let elevTag="";
+  const v=demVerdict();
+  if(v){
+    elevTag = v.ok
+      ? `<span class="tag" style="color:var(--calm);border-color:rgba(86,197,150,.35)">${v.okText}</span>`
+      : `<span class="tag note">${v.ngText}・座標要確認</span>`;
+  }
+  // 選択中の山（DB/プリセット）はrank・別名も表示
+  const selBadge = (SEL && SEL.source!=="manual" && SEL.rank!=null) ? rankBadge(SEL.rank) : "";
+  const selAlias = (SEL && SEL.aliases && SEL.aliases.length) ? ` <span class="cn-alias">／${SEL.aliases[0]}</span>` : "";
+  const placeName = (SEL && SEL.source!=="manual" && SEL.name) ? SEL.name : place;
+  // アンサンブル確率＋遠望（FOCUS日・午後中心の要約を画面にも一行）
+  let probLine="";
+  if(DATA.ens||DATA.aq){
+    const bits=[];
+    if(DATA.ens){
+      const pPM=ensPrecipProb(FOCUS,11,15), cP=ensCapeProb(FOCUS,11,15,ENS_CAPE_MOD);
+      if(pPM!=null) bits.push(`午後の降水確率 ${pPM}%`);
+      if(cP!=null) bits.push(`雷の芽(CAPE≥${ENS_CAPE_MOD}) ${cP}%`);
+    }
+    if(DATA.aq){ const a=aqBand(FOCUS,9,15), b=a&&aodBand(a.aod); if(b) bits.push(`遠望 ${b.emoji}${b.label}`); }
+    if(bits.length) probLine=`<div class="coords">📊 ${bits.join(" ／ ")}${DATA.ens?` <span style="opacity:.5">(アンサンブル${ensCount()}メンバー)</span>`:""}</div>`;
+  }
+  $("#meta").innerHTML=`
+    <div class="place">📍 ${placeName}${selBadge}${selAlias}</div>
+    <div class="coords">${rc.summit?`📍山頂 ${rc.lat.toFixed(4)}, ${rc.lng.toFixed(4)}`:`grid ${rc.lat.toFixed(3)}, ${rc.lng.toFixed(3)}`} · ${m.elev!=null?fmtElev(m.elev):"標高—"}${DATA.elevSrc?` <span style="opacity:.55">(${DATA.elevSrc})</span>`:""}${(!rc.summit&&rc.model)?` <span style="opacity:.55">(${rc.model}が最寄り)</span>`:""}</div>
+    ${sun?`<div class="coords">☀ 日の出 ${hhmm(sun.sunrise)} ／ 🌙 日の入 ${hhmm(sun.sunset)}</div>`:''}
+    ${probLine}
+    <div class="fresh">
+      <span class="tag">取得 ${f.getMonth()+1}/${f.getDate()} ${hh}:${mm} JST</span>
+      <span class="tag">全球モデルは6h更新＝鮮度の目安</span>
+      ${(!rc.summit&&rc.km!=null&&rc.km>=2)?`<span class="tag note">⚠ 最寄り格子 ~${Math.round(rc.km)}km</span>`:''}
+      ${elevTag}
+    </div>`;
+}
+
+function renderDays(){
+  const w=$("#days-tabs"); w.innerHTML="";
+  DATA.dates.forEach(d=>{
+    const b=document.createElement("button");
+    b.className="day-tab"+(d===FOCUS?" active":"");
+    const dt=new Date(d+"T00:00");
+    const wd=["日","月","火","水","木","金","土"][dt.getDay()];
+    b.textContent=`${dt.getMonth()+1}/${dt.getDate()}(${wd})`;
+    b.onclick=()=>{ FOCUS=d; renderDays(); renderMeta(); renderFocus(); };
+    w.appendChild(b);
+  });
+}
+
+function renderFocus(){ renderSpread(); renderCape(); renderTable(); renderSummary(); }
+
+function spreadRows(level){
+  const hours=[3,6,9,12,15,18,21];
+  const key="wind_speed_"+level+"hPa";
+  let html="";
+  hours.forEach(h=>{
+    const i=idxAt(FOCUS,h); if(i<0) return;
+    const vals=valsAt(key,i).filter(v=>v!=null);
+    if(!vals.length) return;
+    const mn=Math.min(...vals), mx=Math.max(...vals), rng=mx-mn;
+    const [mark,,col]=agreement(rng);
+    const bandL=clamp(mn/WIND_SCALE*100,0,100), bandW=clamp((mx-mn)/WIND_SCALE*100,1,100);
+    let ticks="";
+    MODELS.forEach((m)=>{
+      const v=DATA.byModel[m.id][key]; const val=v?v[i]:null;
+      if(val==null) return;
+      const left=clamp(val/WIND_SCALE*100,2,98);
+      ticks+=`<span class="tick" style="left:${left}%" title="${m.name}">${m.short}${Math.round(val)}</span>`;
+    });
+    html+=`
+      <div class="spread-row">
+        <div class="sp-time">${String(h).padStart(2,"0")}:00</div>
+        <div class="track">
+          <div class="band" style="left:${bandL}%;width:${bandW}%;background:${windColor(mx)}"></div>
+          ${ticks}
+        </div>
+        <div class="sp-read">
+          <span class="mark" style="color:${col}">${mark}</span>
+          <span style="color:${windColor(mx)}"> ${Math.round(mn)}–${Math.round(mx)}</span><br>
+          <span class="rng">幅 ${rng.toFixed(0)} m/s</span>
+        </div>
+      </div>`;
+  });
+  return html;
+}
+function renderSpread(){
+  const L=currentLevels();
+  const head=$("#spread-head");
+  const P=lv=>PLEVELS[lv]||{altShort:"",models:MODELS.length};
+  if(L.bracket){
+    if(head) head.innerHTML=`🌬 稜線の風 ${L.main}＋${L.sub}hPa で挟む <span class="hint">${P(L.main).altShort}と${P(L.sub).altShort}・山頂はこの間（${P(L.main).models}/${P(L.sub).models}モデル）</span>`;
+    const a=spreadRows(L.main), b=spreadRows(L.sub);
+    let html="";
+    if(a) html+=`<p class="lvl-tag">${L.main}hPa（${P(L.main).altShort}・${P(L.main).models}モデル）</p>`+a;
+    if(b) html+=`<p class="lvl-tag" style="margin-top:16px">${L.sub}hPa（${P(L.sub).altShort}・${P(L.sub).models}モデル）</p>`+b;
+    $("#spread").innerHTML=html||'<p style="color:var(--mist);font-size:13px">この日の該当データが無いよ。</p>';
+  }else{
+    if(head) head.innerHTML=`🌬 稜線の風 ${L.main}hPa <span class="hint">${P(L.main).alt}・${P(L.main).models}モデルの一致度（バーが狭い＝高確度）</span>`;
+    const a=spreadRows(L.main);
+    let html=a||"";
+    const b=spreadRows(L.sub);
+    if(b) html+=`<p class="lvl-tag sub" style="margin-top:16px">補助 ${L.sub}hPa（${P(L.sub).altShort}）— 主役と挟む層</p>`+b;
+    $("#spread").innerHTML=html||`<p style="color:var(--mist);font-size:13px">この日の${L.main}hPaデータが無いよ。</p>`;
+  }
+}
+
+function renderCape(){
+  // 午後（11-15時）の最大CAPEをモデル別に
+  const idx=bandIdx(FOCUS,11,15);
+  const w=$("#cape"); w.innerHTML="";
+  CAPE_MODELS.forEach(mid=>{
+    const arr=DATA.byModel[mid].cape;
+    const name=MODELS.find(m=>m.id===mid).name;
+    let max=null;
+    if(arr) idx.forEach(i=>{ if(arr[i]!=null) max=(max==null?arr[i]:Math.max(max,arr[i])); });
+    const [lab,desc,col]=capeRead(max);
+    w.innerHTML+=`
+      <div class="cape-card">
+        <div class="cm">${name} · 午後最大</div>
+        <div class="cv" style="color:${col}">${max==null?"—":Math.round(max)}<span style="font-size:12px;color:var(--mist)"> J/kg</span></div>
+        <div class="cl" style="color:${col}">${lab}</div>
+        <div class="cd">${desc}</div>
+      </div>`;
+  });
+  // 4枚目：CIN(対流の蓋・GFS日中9-15時の中央値=その日の蓋の地力。瞬間的な0に引っ張られない)
+  const cinArr=DATA.byModel.gfs_seamless.convective_inhibition;
+  const cinIdx=bandIdx(FOCUS,9,15);
+  let cinVals=[];
+  if(cinArr) cinIdx.forEach(i=>{ if(cinArr[i]!=null) cinVals.push(Math.abs(cinArr[i])); });
+  const cinMid=median(cinVals);
+  const [clab,cdesc,ccol]=cinRead(cinMid);
+  w.innerHTML+=`
+      <div class="cape-card">
+        <div class="cm">CIN 蓋 · GFS日中中央値</div>
+        <div class="cv" style="color:${ccol}">${cinMid==null?"—":Math.round(cinMid)}<span style="font-size:12px;color:var(--mist)"> J/kg</span></div>
+        <div class="cl" style="color:${ccol}">${clab}</div>
+        <div class="cd">${cdesc}</div>
+      </div>`;
+}
+
+function renderTable(){
+  const L=currentLevels();
+  const mainKey="wind_speed_"+L.main+"hPa", mainDir="wind_direction_"+L.main+"hPa";
+  const windHdr=L.bracket?`風${L.main}/${L.sub}・突風 m/s`:`風${L.main}hPa・突風 m/s`;
+  const bands=[["早朝","〜7時",0,7],["午前","7〜11時",7,11],["午後","11〜15時",11,15],["夕方","15〜19時",15,19],["夜","19時〜",19,24]];
+  let html=`<thead><tr><th>時間帯</th><th>天気</th><th>降水 mm</th><th>${windHdr}</th><th>気温・体感 ℃</th><th>雲 低/中/高 %</th><th>CAPE</th></tr></thead><tbody>`;
+  bands.forEach(([nm,rng,h0,h1])=>{
+    const idx=bandIdx(FOCUS,h0,h1);
+    if(!idx.length) return;
+    // 主役面の風速: 全モデル全時間のmin-max
+    let wmn=null,wmx=null;
+    idx.forEach(i=>valsAt(mainKey,i).forEach(v=>{if(v!=null){wmn=(wmn==null?v:Math.min(wmn,v));wmx=(wmx==null?v:Math.max(wmx,v));}}));
+    // 主役面の風向: 循環平均
+    let dirs=[]; idx.forEach(i=>valsAt(mainDir,i).forEach(v=>{if(v!=null)dirs.push(v);}));
+    const dir=avgDir(dirs);
+    // 挟み(2,500m級)時：補助面の風速レンジを小さく添える
+    let subStr="";
+    if(L.bracket){
+      let smn=null,smx=null; const subKey="wind_speed_"+L.sub+"hPa";
+      idx.forEach(i=>valsAt(subKey,i).forEach(v=>{if(v!=null){smn=(smn==null?v:Math.min(smn,v));smx=(smx==null?v:Math.max(smx,v));}}));
+      if(smn!=null) subStr=` <span style="color:var(--mist-dim);font-size:11px">/${L.sub}→${Math.round(smn)}-${Math.round(smx)}</span>`;
+    }
+    // 突風(地上10m)の最大
+    let gmx=null; idx.forEach(i=>valsAt("wind_gusts_10m",i).forEach(v=>{if(v!=null)gmx=(gmx==null?v:Math.max(gmx,v));}));
+    // 気温: min-max
+    let tmn=null,tmx=null;
+    idx.forEach(i=>valsAt("temperature_2m",i).forEach(v=>{if(v!=null){tmn=(tmn==null?v:Math.min(tmn,v));tmx=(tmx==null?v:Math.max(tmx,v));}}));
+    // 体感: 最も冷える値(min)
+    let amn=null; idx.forEach(i=>valsAt("apparent_temperature",i).forEach(v=>{if(v!=null)amn=(amn==null?v:Math.min(amn,v));}));
+    // 雲: 低/中/高 をモデル間中央値（平均は0/100%の外れ値に弱い・眺望は低層雲が鍵）
+    const medVar=(vn)=>{const a=[];idx.forEach(i=>valsAt(vn,i).forEach(v=>{if(v!=null)a.push(v);}));return a.length?Math.round(agg(a)):null;};
+    const cLow=medVar("cloud_cover_low"), cMid=medVar("cloud_cover_mid"), cHigh=medVar("cloud_cover_high");
+    // 降水: 各時刻のモデル間中央値を合計（1モデルの微量maxで膨らまない＝晴れなのに雨量、を防ぐ）
+    let pSum=0; idx.forEach(i=>{const mv=agg(valsAt("precipitation",i).filter(v=>v!=null)); pSum+=(mv||0);});
+    // CAPE: GFS/ECMWF/ICON max
+    let cmax=null; idx.forEach(i=>CAPE_MODELS.forEach(mid=>{const a=DATA.byModel[mid].cape;if(a&&a[i]!=null)cmax=(cmax==null?a[i]:Math.max(cmax,a[i]));}));
+    // 天気: 最悪コード
+    let wc=worstWeatherCode(idx);
+    const wcol=windColor(wmx);
+    const arrow=dir==null?"":`<span style="color:${wcol};font-size:${windArrowSize(wmx)}px;line-height:1">${dirArrow(dir)}</span> `;
+    const dname=dir==null?"":` <span style="color:var(--mist);font-size:12px">${dirName(dir)}</span>`;
+    const gust=gmx==null?"":` <span style="color:${windColor(gmx)};font-size:12px">突${Math.round(gmx)}</span>`;
+    const feel=amn==null?"":` <span style="color:var(--mist-dim);font-size:12px">体感${Math.round(amn)}</span>`;
+    html+=`<tr>
+      <td class="band">${nm}<small>${rng}</small></td>
+      <td style="text-align:right;font-size:13px">${wcode(wc)}</td>
+      <td><span class="num">${pSum.toFixed(1)}</span></td>
+      <td style="white-space:nowrap">${arrow}<span class="num" style="color:${wcol}">${wmn==null?"—":Math.round(wmn)+"–"+Math.round(wmx)}</span>${dname}${gust}${subStr}</td>
+      <td style="white-space:nowrap"><span class="num">${tmn==null?"—":Math.round(tmn)+"–"+Math.round(tmx)}</span>${feel}</td>
+      <td style="white-space:nowrap"><span class="num" style="color:${lowCloudColor(cLow)}">${cLow==null?"—":cLow}</span><span style="color:var(--mist-dim);font-size:12px"> / ${cMid==null?"—":cMid} / ${cHigh==null?"—":cHigh}</span></td>
+      <td><span class="num" style="color:${capeRead(cmax)[2]}">${cmax==null?"—":Math.round(cmax)}</span></td>
+    </tr>`;
+  });
+  $("#tbl").innerHTML=html+"</tbody>";
+}
+
+// サマリーテキスト用：指定気圧面の時刻別モデル一致度行（モデル順 E/G/Gs/M/I）
+function windLevelLines(date, level){
+  let s="";
+  [3,6,9,12,15,18,21].forEach(h=>{
+    const i=idxAt(date,h); if(i<0) return;
+    const raw=valsAt("wind_speed_"+level+"hPa",i);
+    const vals=raw.filter(v=>v!=null);
+    if(!vals.length) return;
+    const rng=Math.max(...vals)-Math.min(...vals);
+    const [mark,desc]=agreement(rng);
+    const str=raw.map(v=>v==null?"—":Math.round(v)).join("/");
+    s+=`  ${String(h).padStart(2,"0")}時: ${str}  (幅${rng.toFixed(0)} ${mark}${desc})\n`;
+  });
+  return s;
+}
+function renderSummary(){
+  const m=DATA.meta;
+  const placeSel=PRESETS[$("#preset").value];
+  const place=(placeSel&&placeSel.lat!=="")?placeSel.label.split(" (")[0]:($("#qname").value.trim()||"指定地点");
+  const f=m.fetched, hh=String(f.getHours()).padStart(2,"0"),mm=String(f.getMinutes()).padStart(2,"0");
+  // 集計ヘルパー（全モデル横断・idx配列を受け取る）
+  const med   =(vn,idx)=>{const a=[];idx.forEach(i=>valsAt(vn,i).forEach(v=>{if(v!=null)a.push(v);}));return a.length?agg(a):null;}; // 雲などの代表値（外れ値に強い中央値）
+  const avg   =(vn,idx)=>{let s=0,n=0;idx.forEach(i=>valsAt(vn,i).forEach(v=>{if(v!=null){s+=v;n++;}}));return n?s/n:null;}; // 雲海判定の低層雲・湿度（早朝の代表値）
+  const maxOf =(vn,idx)=>{let x=null;idx.forEach(i=>valsAt(vn,i).forEach(v=>{if(v!=null)x=(x==null?v:Math.max(x,v));}));return x;}; // 突風など「最悪値」を見る項目用
+  const minOf =(vn,idx)=>{let x=null;idx.forEach(i=>valsAt(vn,i).forEach(v=>{if(v!=null)x=(x==null?v:Math.min(x,v));}));return x;}; // 体感など「最も厳しい値」用
+  const sumMed=(vn,idx)=>{let t=0;idx.forEach(i=>{const mv=agg(valsAt(vn,i).filter(v=>v!=null));t+=(mv||0);});return t;}; // 降水：各時刻の中央値を合計
+  const r=v=>v==null?"—":Math.round(v);
+  const WD=["日","月","火","水","木","金","土"];
+
+  // ===== ヘッダ（1回）=====
+  const L=currentLevels();
+  const pMain=PLEVELS[L.main]||{altShort:"",models:MODELS.length};
+  const pSub =PLEVELS[L.sub] ||{altShort:"",models:MODELS.length};
+  const lvlNote = L.bracket
+    ? `主役 ${L.main}hPa(${pMain.altShort}) ＋ ${L.sub}hPa(${pSub.altShort}) で挟む ※2,500m級は山頂がこの2面の間`
+    : (L.unknown
+        ? `標高不明→暫定 ${L.main}hPa`
+        : `主役 ${L.main}hPa(${pMain.altShort}・${pMain.models}モデル) ／ 補助 ${L.sub}hPa(${pSub.altShort})`);
+  // 山名（rank/別名つき）＋入力した山頂座標＋座標照合（ソナ側の二重チェック素材）
+  const selName = (SEL && SEL.source!=="manual" && SEL.name)
+    ? `${SEL.name}${(SEL.aliases&&SEL.aliases.length)?`／${SEL.aliases[0]}`:""}${(SEL.rank!=null&&RANKMETA[SEL.rank])?`・${RANKMETA[SEL.rank].label}`:""}`
+    : place;
+  const inLat=parseFloat($("#lat").value), inLng=parseFloat($("#lng").value);
+  const srcLabel = SEL ? ({meizan:"バックデータDB",preset:"プリセット",OSM:"OSM",GSI:"地理院地図",OM:"Open-Meteo",manual:"手入力",web:"web"}[SEL.source]||SEL.source) : "—";
+  const v=demVerdict();
+  let s=`=== ソナ予報インプット｜${selName}(${m.elev!=null?fmtElev(Math.round(m.elev)):"標高—"}${DATA.elevSrc?"・"+DATA.elevSrc:""}) ===\n`;
+  const rcS=repCoord();
+  const gridDesc = rcS.summit
+    ? `データは最寄り格子から取得（座標は精査済み）`
+    : `モデル最寄り格子 ${rcS.lat.toFixed(3)},${rcS.lng.toFixed(3)}（${rcS.model||"全球"}・山頂から~${rcS.km!=null?Math.round(rcS.km):"?"}km）`;
+  s+=`山頂座標 ${isNaN(inLat)?"—":inLat.toFixed(5)},${isNaN(inLng)?"—":inLng.toFixed(5)}（入力＝座標照合用・出所:${srcLabel}）／ ${gridDesc}\n`;
+  s+=`座標照合: ${v?(v.ok?v.okText:v.ngText+"＝山頂を外してる疑い、予報前に座標確認推奨"):"照合なし（バックデータ外/手入力＝ソナ側でDEM裏取り推奨）"}\n`;
+  s+=`取得 ${f.getMonth()+1}/${f.getDate()} ${hh}:${mm}JST(全球6h更新) / 全${DATA.dates.length}日分\n`;
+  s+=`モデル順: ECMWF / GFS / GSM / MSM / ICON（5モデル）\n`;
+  s+=`稜線の風の読み: ${lvlNote}\n`;
+  s+=`集計表示: このテキストは中央値とMAXを常に併記（括弧 MAX=悲観・割れた日に最悪を拾う値）※画面の表はプルダウンで片方表示だが、ソナへの素材は両方渡す\n`;
+  s+=`集計の読み方: 気温・地上風=5モデルのレンジ(最小-最大＝予報の割れ幅) ／ 稜線風=気圧面により3〜5モデル(800hPaはECMWF/GSM欠で3) ／ 体感=最も冷える値(min) ／ 突風・CAPE=最大(安全側) ／ 雲・降水・3時間刻みの風=中央値（括弧でMAX併記） ／ 風向=循環平均\n`;
+  s+=`天気記号の注意: weather_codeは雲量+降水から算出（梅雨は湿度高で弱雨が出やすい）。記号は降水の強度(mm/h)で判定し、ごく弱い霧雨(0.1mm/h未満)は曇りに丸めるので合計降水mmが少量でも記号は曇りのことがある。快晴☀️/晴れ🌤️/薄曇り⛅/曇り☁️は区別。行動判断は降水量mm＋低層雲%を優先。雷⛈️は同時刻に2モデル以上が発雷を示した時のみ表示（降水0mmでも雷だけ立つことあり＝CAPE/CINで別判断）\n`;
+  s+=`追加データ: ${DATA.ens?`アンサンブル${ensCount()}メンバー(GFS+ECMWF)で降水確率・雷の芽(CAPE超過率)を併記`:`アンサンブル=取得なし`} ／ ${DATA.aq?`AODで遠望クリア度(雲とは別軸の遠景の霞み)`:`遠望AOD=取得なし`}。いずれもsurface系で、800hPa帯の稜線風は従来どおり5モデル決定論で読む（アンサンブルは800hPa風を欠くため）\n`;
+  s+=`\n■ 総観（気圧配置・前線・台風・複数日の流れ）\n  ※ここはソナがWeb確認で補完する欄\n`;
+
+  // ===== 各日ブロック（取得した全日分）=====
+  DATA.dates.forEach(date=>{
+    const dt=new Date(date+"T00:00");
+    const sun=(DATA.daily&&DATA.daily[date])?DATA.daily[date]:null;
+    s+=`\n━━━━━━━ ${date}(${WD[dt.getDay()]}) ━━━━━━━\n`;
+    if(sun) s+=`日の出 ${hhmm(sun.sunrise)} / 日の入 ${hhmm(sun.sunset)}\n`;
+
+    // 時間帯サマリー
+    s+=`■ 時間帯サマリー（風向 風${L.main} 突風(10m) / 気温(体感) / 雲 低中高 / 降水 / 天気）\n`;
+    [["早朝","〜7",0,7],["午前","7-11",7,11],["午後","11-15",11,15],["夕方","15-19",15,19],["夜","19-",19,24]].forEach(([nm,rg,h0,h1])=>{
+      const idx=bandIdx(date,h0,h1); if(!idx.length) return;
+      const wmn=minOf("wind_speed_"+L.main+"hPa",idx), wmx=maxOf("wind_speed_"+L.main+"hPa",idx);
+      let dirs=[]; idx.forEach(i=>valsAt("wind_direction_"+L.main+"hPa",i).forEach(v=>{if(v!=null)dirs.push(v);}));
+      const dir=avgDir(dirs);
+      const gmx=maxOf("wind_gusts_10m",idx);
+      const tmn=minOf("temperature_2m",idx), tmx=maxOf("temperature_2m",idx);
+      const amn=minOf("apparent_temperature",idx);
+      // 変動項目（雲・降水・天気）は中央値とMAXを両方算出して併記
+      const clM=withMode('median',()=>med("cloud_cover_low",idx)), cmM=withMode('median',()=>med("cloud_cover_mid",idx)), chM=withMode('median',()=>med("cloud_cover_high",idx));
+      const clX=withMode('max',()=>med("cloud_cover_low",idx)), cmX=withMode('max',()=>med("cloud_cover_mid",idx)), chX=withMode('max',()=>med("cloud_cover_high",idx));
+      const ppM=withMode('median',()=>sumMed("precipitation",idx)), ppX=withMode('max',()=>sumMed("precipitation",idx));
+      const rainM=withMode('median',()=>sumMed("rain",idx)), snowM=withMode('median',()=>sumMed("snowfall",idx));
+      const wcM=withMode('median',()=>worstWeatherCode(idx)), wcX=withMode('max',()=>worstWeatherCode(idx));
+      const wstr=wmn==null?"—":r(wmn)+"-"+r(wmx);
+      const gstr=gmx==null?"":` 突${r(gmx)}`;
+      const tstr=tmn==null?"—":r(tmn)+"-"+r(tmx);
+      const astr=amn==null?"":`(体感${r(amn)})`;
+      const dstr=dir==null?"":dirName(dir)+" ";
+      const ptype=precipType(rainM,snowM,wcM,idx.length);
+      const cloudM=`${r(clM)}/${r(cmM)}/${r(chM)}`, cloudX=`${r(clX)}/${r(cmX)}/${r(chX)}`;
+      const cloudStr=(cloudM===cloudX)?cloudM:`${cloudM}（MAX ${cloudX}）`;
+      const pstrM=ptype==="なし"?"降水なし":`${ptype}${ppM.toFixed(1)}mm`;
+      const pstr=(Math.abs(ppM-ppX)<0.05)?pstrM:`${pstrM}（MAX ${ppX.toFixed(1)}mm）`;
+      const wsym=(wcM===wcX)?wcode(wcM):`${wcode(wcM)}（MAX ${wcode(wcX)}）`;
+      s+=`  ${nm}(${rg}時): ${dstr}${wstr}${gstr} / ${tstr}℃${astr} / 雲 ${cloudStr} / ${pstr} / ${wsym}\n`;
+    });
+
+    // 3時間刻み
+    s+=`■ 3時間刻み（中央値／括弧でMAX併記・突風(10m)は最大・風${L.main}）\n`;
+    [3,6,9,12,15,18,21].forEach(h=>{
+      const i=idxAt(date,h); if(i<0) return;
+      const w=valsAt("wind_speed_"+L.main+"hPa",i).filter(v=>v!=null);
+      const g=valsAt("wind_gusts_10m",i).filter(v=>v!=null);
+      const lo=valsAt("cloud_cover_low",i).filter(v=>v!=null);
+      const pr=valsAt("precipitation",i).filter(v=>v!=null);
+      const wMed=w.length?Math.round(withMode('median',()=>agg(w))):null;
+      const wMax=w.length?Math.round(withMode('max',()=>agg(w))):null;
+      const gMax=g.length?Math.max(...g):null;          // 突風は瞬間最大で行動可否が決まるためmax
+      const loMed=lo.length?Math.round(withMode('median',()=>agg(lo))):null;
+      const loMax=lo.length?Math.round(withMode('max',()=>agg(lo))):null;
+      const pMed=pr.length?(withMode('median',()=>agg(pr))||0):0;
+      const pMax=pr.length?(withMode('max',()=>agg(pr))||0):0;
+      const wS=(wMed===wMax)?r(wMed):`${r(wMed)}（M${r(wMax)}）`;
+      const loS=(loMed===loMax)?r(loMed):`${r(loMed)}（M${r(loMax)}）`;
+      const pS=(Math.abs(pMed-pMax)<0.05)?pMed.toFixed(1):`${pMed.toFixed(1)}（M${pMax.toFixed(1)}）`;
+      s+=`  ${String(h).padStart(2,"0")}時: 風${wS}${gMax!=null?" 突"+r(gMax):""} / 低層雲${loS} / 雨${pS}\n`;
+    });
+
+    // 稜線の風 モデル一致度（主役面＋補助/挟み面）
+    s+=`■ 稜線の風 ${L.main}hPa ≒${pMain.altShort}（${pMain.models}モデル一致度・モデル順E/G/Gs/M/I）\n`;
+    s+=windLevelLines(date, L.main);
+    if(L.bracket){
+      s+=`■ 稜線の風(挟み) ${L.sub}hPa ≒${pSub.altShort}（${pSub.models}モデル・山頂はこの2面の間で読む）\n`;
+      s+=windLevelLines(date, L.sub);
+    }else if(!L.unknown){
+      s+=`■ 補助 ${L.sub}hPa ≒${pSub.altShort}（主役と挟む層・${pSub.models}モデル）\n`;
+      s+=windLevelLines(date, L.sub);
+    }
+
+    // 雷CAPE
+    s+=`■ 雷CAPE J/kg（GFS/ECMWF/ICON・午後11-15時の最大）\n`;
+    const idxA=bandIdx(date,11,15);
+    CAPE_MODELS.forEach(mid=>{
+      const arr=DATA.byModel[mid].cape; let max=null;
+      if(arr) idxA.forEach(i=>{if(arr[i]!=null)max=(max==null?arr[i]:Math.max(max,arr[i]));});
+      s+=`  ${MODELS.find(x=>x.id===mid).name}: ${max==null?"—":Math.round(max)}（${capeRead(max)[0]}）\n`;
+    });
+    // CIN(対流の蓋・GFS日中9-15時の中央値=蓋の地力)
+    const cinArrS=DATA.byModel.gfs_seamless.convective_inhibition;
+    if(cinArrS){
+      const cinIdxS=bandIdx(date,9,15);
+      let cinVs=[]; cinIdxS.forEach(i=>{if(cinArrS[i]!=null)cinVs.push(Math.abs(cinArrS[i]));});
+      const cinMid=median(cinVs);
+      if(cinMid!=null) s+=`■ CIN 対流の蓋 J/kg（GFS・日中9-15時の中央値＝蓋の地力）: ${Math.round(cinMid)}（${cinRead(cinMid)[0]}）※小さいほど発雷しやすい。CAPE大×CIN小×午後の日射で雷本番\n`;
+    }
+
+    // 雲海インジケータ（山頂面=主役面、中腹=その直下面。標高に追従）
+    const idxMorn=bandIdx(date,4,9);
+    if(idxMorn.length){
+      const topLv=L.main, midLv=midLevelFor(L.main);
+      const lo=avg("cloud_cover_low",idxMorn);
+      const rhTop=avg("relative_humidity_"+topLv+"hPa",idxMorn);
+      const rhMid=avg("relative_humidity_"+midLv+"hPa",idxMorn);
+      const topAlt=(PLEVELS[topLv]?PLEVELS[topLv].altShort:topLv+"hPa"), midAlt=(PLEVELS[midLv]?PLEVELS[midLv].altShort:midLv+"hPa");
+      const sea=seaOfClouds(lo,rhTop,rhMid,topAlt,midAlt);
+      if(sea) s+=`■ 雲海(早朝4-9時): ${sea.label} — ${sea.note}（低層雲${r(lo)}%/中腹${midLv}hPa${r(rhMid)}%/山頂${topLv}hPa${r(rhTop)}%）\n`;
+    }
+
+    // 気圧トレンド
+    const pt=pressureTrend(bandIdx(date,0,24));
+    if(pt) s+=`■ 気圧トレンド(当日): ${pt.arrow} ${pt.delta}hPa — ${pt.note}\n`;
+
+    // 0℃高度
+    const fl=DATA.byModel.gfs_seamless.freezing_level_height;
+    if(fl){ const i=idxAt(date,9); if(i>=0&&fl[i]!=null) s+=`■ 0℃高度(GFS 9時): 約${Math.round(fl[i])}m\n`; }
+
+    // アンサンブル確率（fail-soft：取得できた日だけ・surface系）
+    if(DATA.ens && (DATA.ens.cape.length||DATA.ens.precip.length)){
+      const eb=[["早朝",0,7],["午前",7,11],["午後",11,15],["夕",15,19],["夜",19,24]];
+      const pops=eb.map(([nm,a,b])=>{const p=ensPrecipProb(date,a,b); return p==null?null:`${nm}${p}%`;}).filter(Boolean);
+      const cMod=ensCapeProb(date,11,15,ENS_CAPE_MOD), cStr=ensCapeProb(date,11,15,ENS_CAPE_STR);
+      s+=`■ アンサンブル確率（GFS+ECMWF 計${ensCount()}メンバー・surface系）\n`;
+      if(pops.length) s+=`  降水あり率(1時刻でも≥${ENS_PRECIP_MM}mm/h): ${pops.join(" / ")}\n`;
+      if(cMod!=null) s+=`  午後11-15時の不安定: CAPE≥${ENS_CAPE_MOD}を${cMod}%${cStr!=null?` ／ ≥${ENS_CAPE_STR}を${cStr}%`:""}（CIN・午後の日射と併せて発雷判断）\n`;
+      // 連続変数のばらつき（p10-p90）：気温・稜線風(ピーク)・低層雲。午前/午後
+      const wm=ensWindMembers();
+      const meanR=v=>v.reduce((x,y)=>x+y,0)/v.length, maxR=v=>Math.max(...v);
+      const fmtR=(o,u,d)=> o? `${o.p10.toFixed(d)}〜${o.p90.toFixed(d)}${u}` : null;
+      const spreadLines=[];
+      [["午前",7,11],["午後",11,15]].forEach(([nm,a,b])=>{
+        const tt=ensVarBand(DATA.ens.temp,date,a,b,meanR);
+        const cc=ensVarBand(DATA.ens.cloudLow,date,a,b,meanR);
+        const ww=wm?ensVarBand(wm.members,date,a,b,maxR):null;
+        const wex=wm?ensWindExceed(wm.members,date,a,b,15):null;
+        const parts=[];
+        if(tt) parts.push(`気温${fmtR(tt,"℃",0)}`);
+        if(ww) parts.push(`風${wm.level}hPaピーク${fmtR(ww,"m/s",0)}${wex!=null?` ≥15を${wex}%`:""}`);
+        if(cc) parts.push(`低層雲${fmtR(cc,"%",0)}`);
+        if(parts.length) spreadLines.push(`  ばらつき${nm} p10-p90: ${parts.join(" ／ ")}`);
+      });
+      if(spreadLines.length){ s+=spreadLines.join("\n")+"\n"; s+=`  ※ばらつき=メンバーの中央80%幅（決定論の中央値/MAXと相補・幅が広いほど確度低）。風は主役面800hPa欠測の帯では補助面で代用、低層雲はECMWF51メンバー\n`; }
+    }
+    // 遠望クリア度（AOD・黄砂。雲とは別軸の遠景の霞み）
+    if(DATA.aq){
+      const ab=[["早朝",4,9],["午前",9,12],["午後",12,16]];
+      const segs=ab.map(([nm,a,b])=>{const q=aqBand(date,a,b); if(!q)return null; const bd=aodBand(q.aod); const kosa=(q.dust!=null&&q.dust>=DUST_KOSA)?"⚠黄砂":""; return `${nm}${bd.emoji}${bd.label}(AOD${q.aod.toFixed(2)})${kosa}`;}).filter(Boolean);
+      if(segs.length) s+=`■ 遠望クリア度(AOD=エアロゾル光学的厚さ): ${segs.join(" / ")} ※快晴でも数値が高いと遠景が霞む。閾値は暫定で実地調整余地あり\n`;
+    }
+  });
+
+  $("#summary").textContent=s;
+}
+
+// ---- copy ----
+async function copySummary(){
+  const txt=$("#summary").textContent; const btn=$("#copy");
+  try{ await navigator.clipboard.writeText(txt); }
+  catch(e){ const r=document.createRange(); r.selectNode($("#summary")); getSelection().removeAllRanges(); getSelection().addRange(r); document.execCommand("copy"); getSelection().removeAllRanges(); }
+  btn.textContent="コピーした ✓"; btn.classList.add("copied");
+  setTimeout(()=>{ btn.textContent="コピー"; btn.classList.remove("copied"); },1800);
+}
+
+function setStatus(html,isErr){ const s=$("#status"); s.innerHTML=html; s.className=isErr?"err":""; }
+
+// ---- wire ----
+initPresets();
+// 起動時に飯縄山をプリセット（練習用デフォルト・あとは取得ボタンを押すだけ）
+const _iizuna=PRESETS.findIndex(p=>p.label.includes("飯縄"));
+if(_iizuna>=0){ $("#preset").value=_iizuna; applyPreset(); }
+$("#go").onclick=fetchForecast;
+$("#geo").onclick=geocode;
+$("#copy").onclick=copySummary;
+$("#agg").onchange=function(){ AGG_MODE=this.value; if(DATA){ renderTable(); } }; // 表だけ切替（コピペ文面は常時 中央値/MAX 併記＝AGG_MODE非依存なので再描画不要）
+$("#qname").addEventListener("keydown",e=>{ if(e.key==="Enter") geocode(); });
+// 座標・標高を手入力したらDB標高照合を無効化（手入力値は登録DBと無関係なため）＋出所をmanualに
+["#lat","#lng","#elev"].forEach(id=>$(id).addEventListener("input",()=>{
+  EXPECT_ELEV=null;
+  SEL={name:($("#qname").value.trim()||"指定地点"), rank:null, aliases:[], lat:parseFloat($("#lat").value), lng:parseFloat($("#lng").value), source:"manual"};
+}));
+</script>
+</body>
+</html>
