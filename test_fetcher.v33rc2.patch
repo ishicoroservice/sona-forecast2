@@ -1,0 +1,36 @@
+--- a/test_fetcher.js
++++ b/test_fetcher.js
+@@ -342,7 +342,7 @@
+   await w.fetchForecast();T("AOD全欠測帯を省略せず表示",text().includes("午前欠測")&&text().includes("午後欠測"));
+   T("指定モデル数と実有効数を区別",text().includes("指定5モデル・実有効数は時刻別"));
+   sel.value=String(opts.findIndex(o=>o.textContent.startsWith("妙高山 (")));w.applyPreset();T("妙高山プリセットと既存DB座標一致",Number(q("#lat").value)===36.8913888&&Number(q("#lng").value)===138.1136111);
+-  T("開発版番号v3.3-rc1",q("h1 .ver").textContent==="v3.3-rc1");
++  T("開発版番号v3.3-rc2",q("h1 .ver").textContent==="v3.3-rc2");
+ 
+   console.log("== v3.3 監査再現・異常系 ==");
+   pickPreset("飯縄");q("#days").value="1";w.fetch=originalFetch;
+@@ -355,9 +355,9 @@
+   await useMock(j=>{alter(j,"temperature_2m",(x,h,mi)=>mi===0?500:x);alter(j,"freezing_level_height",()=>-9999);});dd=w.detailPayload();T("非物理温度と番兵値を欠測化",dd.byModel.ecmwf_ifs025.temperature_2m.every(x=>x===null)&&dd.byModel.gfs_seamless.freezing_level_height.every(x=>x===null));
+   await useMock(j=>{for(const k of Object.keys(j.hourly))if(k!=="time"&&!k.startsWith("pressure_msl_"))j.hourly[k]=j.hourly.time.map(()=>null);});T("気圧しかない応答拒否",q("#copy").disabled);
+   await useMock(j=>{alter(j,"weather_code",()=>0);alter(j,"relative_humidity_800hPa",(x,h,mi)=>h===4&&mi===1?20:null);alter(j,"cloud_cover_low",(x,h,mi)=>h===4&&mi===1?0:null);alter(j,"relative_humidity_850hPa",()=>null);});T("部分欠測の雲海/展望を保留",text().includes("■ 雲海(早朝4-9時): 判定保留")&&!text().includes("山頂も乾き・展望良好"));
+-  await useMock(j=>{alter(j,"weather_code",()=>66);alter(j,"precipitation",()=>1);alter(j,"rain",()=>1);alter(j,"snowfall",()=>0);});T("着氷性降水を標準文・表で独立保持",text().includes("着氷性降水信号")&&q("#tbl").textContent.includes("着氷性降水信号"));
++  await useMock(j=>{alter(j,"weather_code",()=>66);alter(j,"precipitation",()=>1);alter(j,"rain",()=>1);alter(j,"snowfall",()=>0);});T("着氷性降水を標準文・表で独立保持",text().includes("着氷性降水信号")&&q("#tbl").textContent.includes("着氷")&&q("#band-detail-body").textContent.includes("着氷性降水信号"));
+   await useMock(j=>{alter(j,"weather_code",()=>48);});T("着氷霧信号を保持",text().includes("着氷霧信号"));
+-  await useMock(j=>{alter(j,"weather_code",()=>96);});T("雹の信号を独立保持",text().includes("雹を伴う雷信号")&&q("#tbl").textContent.includes("雹を伴う雷信号"));
++  await useMock(j=>{alter(j,"weather_code",()=>96);});T("雹の信号を独立保持",text().includes("雹を伴う雷信号")&&q("#tbl").textContent.includes("雹")&&q("#band-detail-body").textContent.includes("雹を伴う雷信号"));
+   await useMock(j=>{alter(j,"weather_code",()=>63);alter(j,"precipitation",(x,h,mi)=>mi===0?0:null);});T("モデル部分欠測時は霧雨丸め禁止",w.withMode("max",()=>w.worstWeatherCode([w.idxAt(DATE,7)]))===63&&text().includes("降水モデル/時刻不足"));
+   await useMock(j=>{alter(j,"weather_code",()=>71);alter(j,"rain",()=>null);alter(j,"snowfall",()=>1);alter(j,"precipitation",()=>1);});T("雨欠測でも既知の降雪信号を残す",w.withMode("median",()=>w.worstWeatherCode([w.idxAt(DATE,7)]))===71&&text().includes("降雪あり・雨雪種別不確実"));
+   await useMock(j=>{alter(j,"weather_code",(x,h,mi)=>mi===0?95:null);alter(j,"precipitation",()=>0);});T("1有効モデル雷を2モデル雷と混同しない",w.withMode("median",()=>w.worstWeatherCode([w.idxAt(DATE,7)]))!==95&&w.withMode("max",()=>w.worstWeatherCode([w.idxAt(DATE,7)]))===95&&text().includes("雷信号"));
+@@ -387,7 +387,11 @@
+   const r0=w.realPrecip(DATE,0,7),r1=w.realPrecip(DATE,7,11),rn=w.realPrecip(DATE,19,24);
+   T("07時終端は早朝・11時終端は午前",r0.p.median===2&&r1.p.median===3&&r1.peak===3);
+   T("最終夜の翌00時欠測をゼロ補完しない",rn.p.n===4&&rn.p.total===5&&!rn.p.complete&&text().includes("4/5h・0–5/5モデル・不足"));
+-  T("画面・標準文に実時間降水と旧ラベルを区別",q("#tbl").textContent.includes("実時間降水")&&text().includes("旧ラベル降水:")&&text().includes("実時間降水 3mm"));
++  T("画面・標準文に実時間降水と旧ラベルを区別",q("#tbl").querySelectorAll("td.precip")[1].querySelector(".num").textContent==="3.0"&&q("#band-detail-body").textContent.includes("旧ラベル 2.0mm")&&text().includes("旧ラベル降水:")&&text().includes("実時間降水 3mm"));
++  T("通常表をコンパクトに戻す",!q("#tbl").textContent.includes("旧ラベル")&&!q("#tbl").textContent.includes("5/5モデル")&&!q("#band-detail").open);
++  T("詳細に雨雪内訳・ピーク・旧ラベルを維持",["実時間降水","雨 ","雪 ","1h MAX","旧ラベル"].every(x=>q("#band-detail-body").textContent.includes(x)));
++  T("最終夜の欠測は表にも短く残す",q("#tbl").querySelectorAll("td.precip")[4].textContent.includes("4/5h"));
++  const cp0=text();q("#band-detail").open=true;q("#agg").value="max";q("#agg").dispatchEvent(new w.Event("change"));T("詳細開閉・MAX切替で標準文不変",text()===cp0&&q("#band-detail").open);q("#band-detail").open=false;q("#agg").value="median";q("#agg").dispatchEvent(new w.Event("change"));
+   T("全帯の終端ラベルは重複なし24時間",new Set([[0,7],[7,11],[11,15],[15,19],[19,24]].flatMap(([a,b])=>w.intervalLabels(DATE,a,b))).size===24);
+   T("雄山を大汝山へ同一視しない",sm("雄山").length===0&&sm("大汝山")[0][0]==="立山");
+   T("草津白根山を本白根山に同一視しない",sm("草津白根山").length===0&&sm("本白根山").length===1);

@@ -194,6 +194,13 @@ td:first-child,th:first-child{text-align:left}
 td.band{font-family:var(--display);font-weight:600;color:var(--frost)}
 td.band small{display:block;font-family:var(--mono);font-weight:400;font-size:10px;color:var(--mist-dim)}
 td .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+#tbl td.band,#tbl th:first-child{white-space:nowrap}
+#tbl td.weather,#tbl td.precip{white-space:nowrap}
+#tbl .brief-warn{display:block;color:var(--warn);font-size:10px;line-height:1.3}
+#band-detail{margin-top:10px;font-size:12px;color:var(--mist)}
+#band-detail summary{cursor:pointer;color:var(--mist)}
+#band-detail-body{line-height:1.65;overflow-wrap:anywhere}
+#band-detail-body p{margin:8px 0}
 
 /* summary box */
 .sum-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
@@ -213,7 +220,7 @@ footer a{color:var(--mist)}
 <div class="wrap">
 
   <p class="eyebrow">multi-model ridge weather</p>
-  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.3-rc1</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
+  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.3-rc2</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
   <p class="sub">山を指定 → 5モデル（ECMWF / GFS / JMA GSM / MSM / ICON）の稜線気象を取得。判断はソナ（チャット）が組む。</p>
 
   <!-- INPUT -->
@@ -272,6 +279,8 @@ footer a{color:var(--mist)}
         </select>
       </div>
       <div class="tbl-scroll"><table id="tbl"></table></div>
+      <p class="cape-foot">降水は表示時間帯の実積算（mm）。※不足＝一部欠測・モデル不足。危険信号・1時間MAX・雨雪内訳・旧ラベル値は下の詳細へ。</p>
+      <details id="band-detail"><summary>降水・危険信号の詳細（選択日）</summary><div id="band-detail-body"></div></details>
       <p class="cape-foot">☁️ 雲の低/中/高は高さ帯（低〜3km・中3-8km・高8km〜）。眺望のカギは<b style="color:var(--frost)">低層雲</b>。</p>
       <p class="cape-foot">🧭 矢印＝風の向かう先（北風↓）・色と大きさ＝強さ。<b style="color:var(--frost)">方位名は逆</b>（＝吹いてくる向き）。</p>
     </div>
@@ -1422,7 +1431,8 @@ function renderTable(){
   const mainKey="wind_speed_"+L.main+"hPa", mainDir="wind_direction_"+L.main+"hPa";
   const windHdr=L.bracket?`風${L.main}/${L.sub}・突風 m/s`:`風${L.main}hPa・突風 m/s`;
   const bands=[["早朝","〜7時",0,7],["午前","7〜11時",7,11],["午後","11〜15時",11,15],["夕方","15〜19時",15,19],["夜","19時〜",19,24]];
-  let html=`<thead><tr><th>時間帯</th><th>天気</th><th>降水 mm<br>実時間／旧ラベル</th><th>${windHdr}</th><th>気温・体感 ℃</th><th>雲 低/中/高 %</th><th>CAPE</th></tr></thead><tbody>`;
+  let html=`<thead><tr><th>時間帯</th><th>天気</th><th>降水 mm</th><th>${windHdr}</th><th>気温・体感 ℃</th><th>雲 低/中/高 %</th><th>CAPE</th></tr></thead><tbody>`;
+  let extra="", flagged=false;
   bands.forEach(([nm,rng,h0,h1])=>{
     const idx=bandIdx(FOCUS,h0,h1);
     if(!idx.length) return;
@@ -1450,12 +1460,26 @@ function renderTable(){
     // 雲: 低/中/高 をモデル間中央値（平均は0/100%の外れ値に弱い・眺望は低層雲が鍵）
     const medVar=(vn)=>{const a=[];idx.forEach(i=>valsAt(vn,i).forEach(v=>{if(v!=null)a.push(v);}));return a.length?Math.round(agg(a)):null;};
     const cLow=medVar("cloud_cover_low"), cMid=medVar("cloud_cover_mid"), cHigh=medVar("cloud_cover_high");
-    // 降水: 各時刻のモデル間中央値を合計（1モデルの微量maxで膨らまない＝晴れなのに雨量、を防ぐ）
+    // 人間向けの表は実時間の総降水だけ。旧ラベル・全内訳は詳細へ。
     const ps=bandSum("precipitation",idx), pSum=ps.value;
+    const actual=realPrecip(FOCUS,h0,h1), ap=actual.p, pv=AGG_MODE==="max"?ap.max:ap.median;
+    const hazards=hazardNotes(idx), hazardParts=hazards.split("／").filter(Boolean);
+    const flags=[];
+    if(hazardParts.some(x=>x.startsWith("着氷")))flags.push("着氷");
+    if(hazardParts.some(x=>x.startsWith("雹")))flags.push("雹");
+    else if(hazardParts.some(x=>x.startsWith("雷信号")))flags.push("雷");
+    if(hazardParts.some(x=>x.includes("不足")||x.includes("不確実")))flags.push("不足");
+    const legacyPeak=sourceStats("precipitation",idx).max;
+    // 代表記号が降水を示さない場合も、実時間・旧ラベルのピークの存在を短く残す。
+    const briefRain=Math.max(actual.peak??0,legacyPeak??0)>=PRECIP_RATE_FLOOR;
+    const detailText=realPrecipText(FOCUS,h0,h1,AGG_MODE);
+    extra+=`<p><b>${nm}（${rng}）</b><br>${esc(detailText)}<br>旧ラベル ${pSum==null?"欠測":pSum.toFixed(1)+"mm"}${ps.n<ps.total?`（部分${ps.n}/${ps.total}h）`:""}${hazards?`<br>⚠ ${esc(hazards)}`:""}</p>`;
     // CAPE: GFS/ECMWF/ICON max
     let cmax=null; idx.forEach(i=>CAPE_MODELS.forEach(mid=>{const a=DATA.byModel[mid].cape;if(a&&a[i]!=null)cmax=(cmax==null?a[i]:Math.max(cmax,a[i]));}));
     // 天気: 最悪コード
     let wc=worstWeatherCode(idx);
+    if(briefRain&&(wc==null||wc<51))flags.push("降水");
+    if(flags.length||!ap.complete)flagged=true;
     const wcol=windColor(wmx);
     const arrow=dir==null?"":`<span style="color:${wcol};font-size:${windArrowSize(wmx)}px;line-height:1">${dirArrow(dir)}</span> `;
     const dname=dir==null?"":` <span style="color:var(--mist);font-size:12px">${dirName(dir)}${(dirR!=null&&dirR<DIR_SPLIT_R)?"⚠":""}</span>`;
@@ -1464,8 +1488,8 @@ function renderTable(){
     const tip=(v,k)=>bandTrace(v,idx,k), wTip=`min ${tip(mainKey,"min")} / max ${tip(mainKey,"max")} / 突 ${tip("wind_gusts_10m","max")}`, tTip=`min ${tip("temperature_2m","min")} / max ${tip("temperature_2m","max")} / 体感min ${tip("apparent_temperature","min")}`;
     html+=`<tr>
       <td class="band">${nm}<small>${rng}</small></td>
-      <td style="text-align:right;font-size:13px">${wcode(wc)}${hazardNotes(idx)?`<small style="display:block;color:var(--warn)">${esc(hazardNotes(idx))}</small>`:""}</td>
-      <td><small style="display:block">${esc(realPrecipText(FOCUS,h0,h1,AGG_MODE))}</small><span class="num">旧ラベル ${pSum==null?"—":pSum.toFixed(1)+(ps.n<ps.total?` (部分${ps.n}/${ps.total}h)`:"")}</span></td>
+      <td class="weather" title="${esc(hazards)}">${wcode(wc)}${flags.length?`<small class="brief-warn">⚠ ${flags.join("/")}</small>`:""}</td>
+      <td class="precip" title="${esc(detailText)}"><span class="num">${pv==null?"—":pv.toFixed(1)}</span>${!ap.complete?`<small class="brief-warn">※${ap.n<ap.total?`${ap.n}/${ap.total}h`:"不足"}</small>`:""}</td>
       <td title="${esc(wTip)}" style="white-space:nowrap">${arrow}<span class="num" style="color:${wcol}">${wmn==null?"—":Math.round(wmn)+"–"+Math.round(wmx)}</span>${dname}${gust}${subStr}</td>
       <td title="${esc(tTip)}" style="white-space:nowrap"><span class="num">${tmn==null?"—":Math.round(tmn)+"–"+Math.round(tmx)}</span>${feel}</td>
       <td style="white-space:nowrap"><span class="num" style="color:${lowCloudColor(cLow)}">${cLow==null?"—":cLow}</span><span style="color:var(--mist-dim);font-size:12px"> / ${cMid==null?"—":cMid} / ${cHigh==null?"—":cHigh}</span></td>
@@ -1473,6 +1497,8 @@ function renderTable(){
     </tr>`;
   });
   $("#tbl").innerHTML=html+"</tbody>";
+  $("#band-detail-body").innerHTML=extra;
+  $("#band-detail summary").textContent=flagged?"⚠ 降水・危険信号の詳細（選択日）":"降水・危険信号の詳細（選択日）";
 }
 
 // サマリーテキスト用：指定気圧面の時刻別モデル一致度行（モデル順 E/G/Gs/M/I）
