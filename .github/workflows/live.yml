@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: test "$(git hash-object index.html)" = '38d08360f14b229e50944afff6324da4c150a9b7'
+      - run: test "$(git hash-object index.html)" = '4c7d439b610c67a0be20027d223a35435582ca7e'
       - run: npm install --no-save --no-package-lock jsdom@26.1.0
       - name: Live responses through candidate fetch and render pipeline (not browser CORS)
         run: |
@@ -39,7 +39,7 @@ jobs:
               w.applyPreset();q("#days").value=String(days);await w.fetchForecast();
               if(q("#copy").disabled){console.log(JSON.stringify({name,accepted:false,status:q("#status").textContent}));bad++;continue;}
               const d=w.detailPayload();
-              console.log(JSON.stringify({name,version:d.version,accepted:true,times:d.times.length,requestedDays:days,main:d.levels.main,rhTop:d.levels.rhTop,gsi:d.gsiElev,sent:d.request.elevationSent,responseElev:d.meta.responseElev,grid:[d.meta.lat,d.meta.lng],quality:d.quality,missingUnits:d.missingUnits.length,unavailableSeries:d.unavailableSeries.length,warnings:d.warnings,ensemble:!!d.ensemble,ensMeta:d.ensemble?.meta,aq:!!d.airQuality,aqMeta:d.airQuality?.meta}));
+              console.log(JSON.stringify({name,version:d.version,accepted:true,times:d.times.length,requestedDays:days,main:d.levels.main,rhTop:d.levels.rhTop,gsi:d.gsiElev,sent:d.request.elevationSent,responseElev:d.meta.responseElev,grid:[d.meta.lat,d.meta.lng],quality:d.quality,missingUnits:d.missingUnits.length,unavailableSeries:d.unavailableSeries.length,warnings:d.warnings,ensemble:!!d.ensemble,ensMeta:d.ensemble?.meta,ensUnavailable:d.ensemble?.meta?.unavailableSeries?.length,ensWarningCount:d.ensemble?.meta?.warnings?.length,aq:!!d.airQuality,aqMeta:d.airQuality?.meta}));
               if(d.levels.main!==level||d.times.length!==days*24||d.gsiElev==null||d.meta.responseElev==null||d.quality.length||d.missingUnits.length||d.warnings.length||!d.ensemble||!d.airQuality)bad++;
             }
             dom.window.close();if(bad)process.exitCode=1;

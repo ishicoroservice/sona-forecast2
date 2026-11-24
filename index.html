@@ -213,7 +213,7 @@ footer a{color:var(--mist)}
 <div class="wrap">
 
   <p class="eyebrow">multi-model ridge weather</p>
-  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.3-dev2</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
+  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.3-rc1</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
   <p class="sub">山を指定 → 5モデル（ECMWF / GFS / JMA GSM / MSM / ICON）の稜線気象を取得。判断はソナ（チャット）が組む。</p>
 
   <!-- INPUT -->
@@ -1151,7 +1151,25 @@ async function fetchEnsemble(lat,lng,days,elev,start=forecastDate()){
     const badElev=elev!=null&&j.elevation!=null&&(!validElev(j.elevation)||Math.abs(j.elevation-Math.round(elev))>1);
     if(badElev)meta.warnings.push("ENS応答標高不一致：気温系列不採用");
     else if(elev!=null&&j.elevation==null)meta.warnings.push("ENS応答標高未返却：気温補正未確認");
-    const grab=base=>{const ks=Object.keys(h).filter(k=>(k===base||k.startsWith(base+"_"))&&Array.isArray(h[k]));keys[base]=ks;for(const k of ks){if(h[k].length!==h.time.length)meta.warnings.push(k+":配列長不一致");if(h[k].some(x=>x!=null&&!plausible(base,x)))meta.warnings.push(k+":異常値");if(unitMismatch(j.hourly_units,k,base))meta.warnings.push(k+":単位不一致");else if((j.hourly_units?.[k]??j.hourly_units?.[base])==null&&h[k].some(finite))meta.warnings.push(k+":単位未返却");}return ks.map(k=>h.time.map((_,i)=>!(base==="temperature_2m"&&badElev)&&!unitMismatch(j.hourly_units,k,base)&&plausible(base,h[k][i])?h[k][i]:null));};
+    meta.unavailableSeries=[];
+    const grab=base=>{
+      const all=Object.keys(h).filter(k=>k===base||k.startsWith(base+"_"));
+      const ks=all.filter(k=>Array.isArray(h[k]));keys[base]=ks;
+      for(const k of all.filter(k=>!Array.isArray(h[k])))if(h[k]!=null)meta.warnings.push(k+":配列形式不正");
+      return ks.map(k=>{
+        const a=h[k],unit=j.hourly_units?.[k]??j.hourly_units?.[base];
+        // 決定論と同じ区別：生配列が全長null＋文字列undefinedの場合に限り未提供。数値や長さ異常を隠さない。
+        if(a.length===h.time.length&&a.every(v=>v===null)&&typeof unit==="string"&&unit.trim().toLowerCase()==="undefined"){
+          meta.unavailableSeries.push(k);return h.time.map(()=>null);
+        }
+        if(a.length!==h.time.length)meta.warnings.push(k+":配列長不一致");
+        if(a.some(x=>x!=null&&!plausible(base,x)))meta.warnings.push(k+":異常値");
+        const wrong=unitMismatch(j.hourly_units,k,base);
+        if(wrong)meta.warnings.push(k+":単位不一致");
+        else if(unit==null&&a.some(finite))meta.warnings.push(k+":単位未返却");
+        return h.time.map((_,i)=>!(base==="temperature_2m"&&badElev)&&!wrong&&plausible(base,a[i])?a[i]:null);
+      });
+    };
     const cape=grab("cape"), precip=grab("precipitation"), temp=grab("temperature_2m"), cloudLow=grab("cloud_cover_low");
     const wind={ "925":grab("wind_speed_925hPa"), "850":grab("wind_speed_850hPa"), "700":grab("wind_speed_700hPa") };
     if(!Array.isArray(h.time)||!h.time.length||![...cape,...precip,...temp,...cloudLow,...Object.values(wind).flat()].some(a=>a.some(finite))) return null;
@@ -1515,6 +1533,7 @@ function renderSummary(){
   if(DATA.unavailableSeries.length)s+=`参考: 単位未定義・全欠測 ${DATA.unavailableSeries.length}系列（未提供形式・詳細JSON unavailableSeries）\n`;
   if(DATA.missingUnits.length)s+=`⚠ API単位情報未返却 ${DATA.missingUnits.length}系列（要求単位で暫定表示・要確認）\n`;
   for(const w of DATA.warnings)s+=`⚠ ${w}\n`;
+  if(DATA.ens?.meta?.unavailableSeries?.length)s+=`参考: ENS単位未定義・全欠測 ${DATA.ens.meta.unavailableSeries.length}系列（未提供形式・詳細JSON ensemble.meta.unavailableSeries）\n`;
   for(const [label,aux] of [["ENS",DATA.ens],["AOD",DATA.aq]]){const w=aux?.meta?.warnings||[];if(w.length)s+=`⚠ ${label}: 応答確認事項${w.length}件（${w.slice(0,3).join(" / ")}${w.length>3?" / 他・詳細JSON参照":""}）\n`;}
   if(DATA.dates.length!==SEL.days||DATA.times.length!==SEL.days*24)s+=`⚠ 時刻/日数不足：取得${DATA.times.length}時刻／要求${SEL.days*24}時刻\n`;
   s+=`モデル順: ECMWF / GFS / GSM / MSM / ICON（指定5モデル・実有効数は時刻別）\n`;
