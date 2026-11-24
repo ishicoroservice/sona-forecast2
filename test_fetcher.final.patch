@@ -1,0 +1,11 @@
+--- a/test_fetcher.js
++++ b/test_fetcher.js
+@@ -339,6 +339,8 @@
+   w.fetch=async u=>{const str=String(u),time=mockForecast(1917).hourly.time;if(str.includes("air-quality-api"))return ok({hourly:{time,aerosol_optical_depth:time.map((_,i)=>i<7?.2:null),dust:time.map(()=>0)}});return originalFetch(u);};
+   await w.fetchForecast();T("AOD全欠測帯を省略せず表示",text().includes("午前欠測")&&text().includes("午後欠測"));
+   T("指定モデル数と実有効数を区別",text().includes("指定5モデル・実有効数は時刻別"));
++  sel.value=String(opts.findIndex(o=>o.textContent.startsWith("妙高山 (")));w.applyPreset();T("妙高山プリセットと既存DB座標一致",Number(q("#lat").value)===36.8913888&&Number(q("#lng").value)===138.1136111);
++  T("正式版番号v3.2",q("h1 .ver").textContent==="v3.2");
+   console.log(`\n結果: ${pass} passed / ${fail} failed`);
+   process.exit(fail ? 1 : 0);
+ })().catch(e => { console.error("HARNESS ERROR:", e); process.exit(2); });
