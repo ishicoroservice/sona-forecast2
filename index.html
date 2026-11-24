@@ -213,7 +213,7 @@ footer a{color:var(--mist)}
 <div class="wrap">
 
   <p class="eyebrow">multi-model ridge weather</p>
-  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.2-rc2</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
+  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.2-rc3</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
   <p class="sub">山を指定 → 5モデル（ECMWF / GFS / JMA GSM / MSM / ICON）の稜線気象を取得。判断はソナ（チャット）が組む。</p>
 
   <!-- INPUT -->
@@ -398,7 +398,7 @@ const PRESETS = [
   // 北ア南部（表銀座→主稜線→笠）
   {label:"燕岳 (2,763m)",          lat:36.4069444, lng:137.7127777, elev:2763, rank:2},
   {label:"常念岳 (2,857m)",        lat:36.3255555, lng:137.7275, elev:2857, rank:1},
-  {label:"槍ヶ岳 (3,180m)",        lat:36.3417, lng:137.6475, elev:3180, rank:1},
+  {label:"槍ヶ岳 (3,180m)",        lat:36.3419444, lng:137.6475, elev:3180, rank:1},
   {label:"奥穂高岳 (3,190m)",      lat:36.2894, lng:137.6479, elev:3190, rank:1},
   {label:"笠ヶ岳 (2,897m)",        lat:36.31556, lng:137.55028, elev:2897, rank:1},
   // 頸城 → 八ヶ岳
@@ -1411,13 +1411,13 @@ function renderSummary(){
   if(DATA.unavailableSeries.length)s+=`参考: 単位未定義・全欠測 ${DATA.unavailableSeries.length}系列（未提供形式・詳細JSON unavailableSeries）\n`;
   if(!Object.keys(DATA.hourlyUnits).length)s+=`⚠ API単位情報未返却（要求単位で暫定表示・要確認）\n`;
   if(DATA.dates.length!==SEL.days||DATA.times.length!==SEL.days*24)s+=`⚠ 時刻/日数不足：取得${DATA.times.length}時刻／要求${SEL.days*24}時刻\n`;
-  s+=`モデル順: ECMWF / GFS / GSM / MSM / ICON（5モデル）\n`;
+  s+=`モデル順: ECMWF / GFS / GSM / MSM / ICON（指定5モデル・実有効数は時刻別）\n`;
   s+=`由来 E/G/Gs/M/I、+=同値、全=5モデル同値。帯の由来は風/温min/max・突/雲max・体min。雨MAXは各時刻MAXの和（単一モデル累計ではない）。未丸め値で比較。詳細に発生時刻・中央値由来・全モデル生値。記号は合成判定。\n`;
   s+=`稜線の風の読み: ${lvlNote}\n`;
   s+=`集計表示: このテキストは中央値とMAXを常に併記（括弧 MAX=悲観・割れた日に最悪を拾う値）※画面の表はプルダウンで片方表示だが、ソナへの素材は両方渡す\n`;
-  s+=`集計の読み方: 気温=5モデルのレンジ(最小-最大＝予報の割れ幅) ／ 稜線風=気圧面により3〜5モデル(800hPaはECMWF/GSM欠で3) ／ 体感=最も冷える値(min) ／ 突風・CAPE=最大(安全側・突風はE/G/Iの3モデルが実取得例) ／ 雲・降水・3時間刻みの風=中央値（括弧でMAX併記） ／ 風向=循環平均（⚠割れ=モデル間で風向が定まらない＝前線・気圧の谷通過のサイン、方向を鵜呑みにしない） ／ 3時間刻みの湿=山頂面の湿度%（${RH_GAS_FLOOR}以上でガス圏＝何時からガス化/抜けるかを時刻で読む）\n`;
+  s+=`集計の読み方: 気温=有効モデルのレンジ(最小-最大＝予報の割れ幅) ／ 稜線風=参考3〜5モデル(800hPaはECMWF/GSM欠で通常3・長期はさらに減る場合あり) ／ 体感=最も冷える値(min) ／ 突風・CAPE=最大(安全側・突風はE/G/Iの3モデルが実取得例) ／ 雲・降水・3時間刻みの風=中央値（括弧でMAX併記） ／ 風向=循環平均（⚠割れ=モデル間で風向が定まらない＝前線・気圧の谷通過のサイン、方向を鵜呑みにしない） ／ 3時間刻みの湿=山頂面の湿度%（${RH_GAS_FLOOR}以上でガス圏＝何時からガス化/抜けるかを時刻で読む）\n`;
   s+=`天気記号の注意: weather_codeは雲量+降水から算出（梅雨は湿度高で弱雨が出やすい）。記号は降水の強度(mm/h)で判定し、ごく弱い霧雨(0.1mm/h未満)は曇りに丸めるので合計降水mmが少量でも記号は曇りのことがある。快晴☀️/晴れ🌤️/薄曇り⛅/曇り☁️は区別。行動判断は降水量mm＋低層雲%を優先。雷⛈️は同時刻に2モデル以上が発雷を示した時のみ表示（降水0mmでも雷だけ立つことあり＝CAPE/CINで別判断）。MAX側は単独モデルの雷も⛈️で出す（悲観値＝割れの検知が役割。2モデル同時刻ルールは中央値側の乱発防止）。山頂面の湿度80%以上の時間帯は晴れ判定でも🌫️側へ補正（地形性ガス対策・挟み帯2,250〜3,000m峰は山頂に近い側の面=≥2,450mなら700hPaで判定）\n`;
-  s+=`追加データ: ${DATA.ens?`アンサンブル最大${ensCount()}配列(GFS+ECMWF)で降水確率・雷の芽(CAPE超過率)を併記`:`アンサンブル=取得なし`} ／ ${DATA.aq?`AODで遠望クリア度(雲とは別軸の遠景の霞み)`:`遠望AOD=取得なし`}。いずれもsurface系で、稜線風は従来どおり決定論モデルで読む（800hPa面はGFS/MSM/ICONの3モデル。アンサンブルは800hPa風を欠くため）\n`;
+  s+=`追加データ: ${DATA.ens?`アンサンブル最大${ensCount()}配列(GFS+ECMWF)で降水確率・雷の芽(CAPE超過率)を併記`:`アンサンブル=取得なし`} ／ ${DATA.aq?`AODで遠望クリア度(雲とは別軸の遠景の霞み)`:`遠望AOD=取得なし`}。いずれもsurface系で、稜線風は従来どおり決定論モデルで読む（800hPa面はGFS/MSM/ICONが参考3モデル（有効数は時刻別）。アンサンブルは800hPa風を欠くため）\n`;
   s+=`\n■ 総観（気圧配置・前線・台風・複数日の流れ）\n  ※ここはソナがWeb確認で補完する欄\n`;
 
   // ===== 各日ブロック（取得した全日分）=====
@@ -1585,7 +1585,7 @@ function renderSummary(){
     // 遠望クリア度（AOD・黄砂。雲とは別軸の遠景の霞み）
     if(DATA.aq){
       const ab=[["早朝",4,7],["午前",7,11],["午後",11,15]]; // 時間帯バンド境界に整合（早朝のみ日の出前後4-7時＝夜間を除外）
-      const segs=ab.map(([nm,a,b])=>{const q=aqBand(date,a,b); if(!q)return null; const bd=aodBand(q.aod); const kosa=(q.dust!=null&&q.dust>=DUST_KOSA)?"⚠黄砂":""; return `${nm}${bd.emoji}${bd.label}(AOD${q.aod.toFixed(2)})${q.n<q.total?`(部分${q.n}/${q.total}h)`:""}${q.dustN<q.total?"(黄砂判定一部/欠測)":""}${kosa}`;}).filter(Boolean);
+      const segs=ab.map(([nm,a,b])=>{const q=aqBand(date,a,b); if(!q)return `${nm}欠測`; const bd=aodBand(q.aod); const kosa=(q.dust!=null&&q.dust>=DUST_KOSA)?"⚠黄砂":""; return `${nm}${bd.emoji}${bd.label}(AOD${q.aod.toFixed(2)})${q.n<q.total?`(部分${q.n}/${q.total}h)`:""}${q.dustN<q.total?"(黄砂判定一部/欠測)":""}${kosa}`;}).filter(Boolean);
       if(segs.length) s+=`■ 遠望クリア度(AOD=エアロゾル光学的厚さ): ${segs.join(" / ")} ※快晴でも数値が高いと遠景が霞む。閾値は北ア稜線基準(2026/7確定・稜線は混合層上のためカラムAODは過大評価側＝緩め設定)\n`;
     }
   });
