@@ -281,7 +281,7 @@ footer a{color:var(--mist)}
       <div class="tbl-scroll"><table id="tbl"></table></div>
       <p class="cape-foot">降水は時間帯の合計（mm）。※不足＝データ不足。注意情報・雨雪内訳は下の詳細へ。</p>
       <details id="band-detail"><summary>降水・注意情報の詳細</summary><p>⚠は気象警報ではなく、注意情報です。降水MAX＝代表天気が降水を示さなくても、いずれかのモデルで1時間0.1mm以上（中央値0mmでも表示）。着氷・雹・雷＝いずれかのモデルが予測。不足＝モデル・時刻などのデータ不足。量・時刻・モデルを確認してください。</p><p>中央値：基本の予測。MAX：大きい値・悪天側の予測を確認。降水MAX合計は各時刻の最大値の合計（単一モデルの累計とは別）。風速・気温は予測範囲、突風・CAPEは最大、体感は最低を常に表示。降水は雪などの水換算量を含みます。</p><p>モデル略号：E＝ECMWF、G＝GFS、Gs＝GSM、M＝MSM、I＝ICON。</p><div id="band-detail-body"></div></details>
-      <p class="cape-foot">☁️ 雲の低/中/高は高さ帯（低〜3km・中3-8km・高8km〜）。眺望のカギは<b style="color:var(--frost)">低層雲</b>。</p>
+      <p class="cape-foot">☁️ 雲の低/中/高は高さ帯（低〜3km・中3-8km・高8km〜）。眺望は<b style="color:var(--frost)">低層雲＋山頂湿度</b>で判断。</p>
       <p class="cape-foot">🧭 矢印＝風が進む方向（北風↓）。方位名＝吹いてくる方向。色・大きさ＝強さ。</p>
     </div>
 
@@ -304,7 +304,7 @@ footer a{color:var(--mist)}
     <div class="panel">
       <p class="panel-head">⛈ 雷の目安：CAPE・CIN <span class="hint">CAPE＝午後最大／CIN＝日中中央値</span></p>
       <div class="cape-grid" id="cape"></div>
-      <p class="cape-foot">CAPEは大気の不安定さ、CINは対流を抑える力。<b style="color:var(--frost)">CAPE大 × CIN小 × 午後の日射</b>は雷の目安。CAPEが低くても雷の可能性は残る。</p>
+      <p class="cape-foot">CAPEは大気の不安定さ、CINは対流を抑える力。<b style="color:var(--frost)">CAPE大 × CIN小 × 午後の日射</b>は雷の目安。CINの灰色はCAPE小による参考表示。CAPEが低くても雷の可能性は残る。</p>
     </div>
 
     <div class="panel">
@@ -1396,6 +1396,12 @@ function renderSpread(){
   }
 }
 
+// 表示専用：3モデルの全日CAPEが既存の安定域(<100)で揃い、取得済み雷コードがない場合だけCINを中立表示。
+function cinNeutral(date){
+  const all=bandIdx(date,0,24);
+  return CAPE_MODELS.every(mid=>all.every(i=>{const v=DATA.byModel[mid].cape?.[i];return finite(v)&&v<100;}))
+    && !all.some(i=>MODELS.some(m=>[95,96,99].includes(DATA.byModel[m.id].weather_code?.[i])));
+}
 function renderCape(){
   // 午後（11-15時）の最大CAPEをモデル別に
   const idx=bandIdx(FOCUS,11,15);
@@ -1406,9 +1412,10 @@ function renderCape(){
     let max=null;
     if(arr) idx.forEach(i=>{ if(arr[i]!=null) max=(max==null?arr[i]:Math.max(max,arr[i])); });
     const [lab,desc,col]=capeRead(max);
+    const partial=max!=null&&idx.some(i=>!finite(arr?.[i]));
     w.innerHTML+=`
       <div class="cape-card">
-        <div class="cm">${name} · 午後最大</div>
+        <div class="cm">${name} · 午後最大${partial?' <span style="color:var(--warn)">一部欠測</span>':""}</div>
         <div class="cv" style="color:${col}">${max==null?"—":Math.round(max)}<span style="font-size:12px;color:var(--mist)"> J/kg</span></div>
         <div class="cl" style="color:${col}">${lab}</div>
         <div class="cd">${desc}</div>
@@ -1421,12 +1428,15 @@ function renderCape(){
   if(cinArr) cinIdx.forEach(i=>{ if(cinArr[i]!=null) cinVals.push(Math.abs(cinArr[i])); });
   const cinMid=median(cinVals);
   const [clab,cdesc,ccol]=cinRead(cinMid);
+  const partial=cinMid!=null&&cinVals.length!==cinIdx.length;
+  const neutral=cinMid!=null&&!partial&&cinNeutral(FOCUS);
+  const cinCol=neutral?"var(--mist)":ccol;
   w.innerHTML+=`
       <div class="cape-card">
-        <div class="cm">CIN 蓋 · GFS日中中央値</div>
-        <div class="cv" style="color:${ccol}">${cinMid==null?"—":Math.round(cinMid)}<span style="font-size:12px;color:var(--mist)"> J/kg</span></div>
-        <div class="cl" style="color:${ccol}">${clab}</div>
-        <div class="cd">${cdesc}</div>
+        <div class="cm">CIN 蓋 · GFS日中中央値${partial?' <span style="color:var(--warn)">一部欠測</span>':""}</div>
+        <div class="cv" style="color:${cinCol}">${cinMid==null?"—":Math.round(cinMid)}<span style="font-size:12px;color:var(--mist)"> J/kg</span></div>
+        <div class="cl" style="color:${cinCol}">${clab}</div>
+        <div class="cd"${neutral?' title="3モデルの全24時間のCAPEが100未満で、取得済みの雷コードなし。CIN単独では雷を判定しません。"':""}>${neutral?"CAPE小・単独評価なし":cdesc}</div>
       </div>`;
 }
 

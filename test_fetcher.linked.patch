@@ -1,0 +1,27 @@
+--- a/test_fetcher.js
++++ b/test_fetcher.js
+@@ -438,6 +438,24 @@
+   T("短い日数ラベルを維持",q("#days").parentElement.querySelector("span").textContent==="日数");
+   T("取得時刻とモデル更新時刻を区別",q("#meta").textContent.includes("モデル更新時刻不明")&&!q("#meta").textContent.includes("6h更新"));
+   T("風の一致は的中保証ではない",!q("#spread-head").textContent.includes("高確度"));
++  const lowC= j=>{alter(j,"cape",x=>x==null?null:0);alter(j,"convective_inhibition",x=>x==null?null:0);alter(j,"weather_code",()=>0);};
++  const cinCard=()=>q("#cape .cape-card:last-child"), cinColor=()=>cinCard().querySelector(".cv").getAttribute("style");
++  await useMock(lowC);
++  T("CAPE全日3モデル安定・CIN0は中立色",cinColor()==="color:var(--mist)"&&cinCard().textContent.includes("CAPE小・単独評価なし")&&text().includes("0（蓋なし）"));
++  T("CAPE低値の3カードは従来の青",[...q("#cape").children].slice(0,3).every(e=>e.querySelector(".cv").getAttribute("style")==="color:var(--sky)"));
++  await useMock(j=>{lowC(j);j.hourly.cape_icon_seamless[6]=100;});
++  T("午前の単独モデルCAPE100でもCINは赤を維持",cinColor()==="color:var(--alert)");
++  await useMock(j=>{lowC(j);j.hourly.weather_code_jma_msm[20]=95;});
++  T("CAPE0でも生の雷信号があればCINは赤・注意保持",cinColor()==="color:var(--alert)"&&q("#tbl").textContent.includes("⚠ 雷"));
++  await useMock(j=>{lowC(j);j.hourly.cape_gfs_seamless[12]=null;});
++  T("CAPE部分欠測時はCINを中立化せず欠測を表示",cinColor()==="color:var(--alert)"&&q("#cape .cape-card").textContent.includes("一部欠測"));
++  await useMock(j=>{lowC(j);j.hourly.convective_inhibition_gfs_seamless[10]=null;});
++  T("CIN部分欠測は赤・欠測を維持",cinColor()==="color:var(--alert)"&&cinCard().textContent.includes("一部欠測"));
++  await useMock(j=>{lowC(j);j.hourly.convective_inhibition_gfs_seamless.fill(null);});
++  T("CIN全欠測は参考表示と混同しない",cinCard().textContent.includes("データなし")&&!cinCard().textContent.includes("単独評価なし"));
++  await useMock(j=>{lowC(j);j.hourly.weather_code_jma_msm.fill(null);});
++  T("MSM期間切れでもCAPE充足時は中立・不足警告は保持",cinColor()==="color:var(--mist)"&&q("#tbl").textContent.includes("不足"));
++  T("モデル別日付はコロン区切り",q("#detail-panel summary").textContent==="🔎 モデル別データ："+q(".day-tab.active").textContent);
+   console.log(`\n結果: ${pass} passed / ${fail} failed`);
+   process.exit(fail ? 1 : 0);
+ })().catch(e => { console.error("HARNESS ERROR:", e); process.exit(2); });
