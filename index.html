@@ -213,7 +213,7 @@ footer a{color:var(--mist)}
 <div class="wrap">
 
   <p class="eyebrow">multi-model ridge weather</p>
-  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.2-rc1</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
+  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.2-rc2</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
   <p class="sub">山を指定 → 5モデル（ECMWF / GFS / JMA GSM / MSM / ICON）の稜線気象を取得。判断はソナ（チャット）が組む。</p>
 
   <!-- INPUT -->
@@ -942,14 +942,19 @@ function shape(j){
   if(j.timezone&&j.timezone!=="Asia/Tokyo")throw new Error("予報時刻のタイムゾーンがJSTと不一致");
   if(j.utc_offset_seconds!=null&&j.utc_offset_seconds!==32400)throw new Error("予報時刻のUTCオフセットがJSTと不一致");
   if(!finite(j.latitude)||!finite(j.longitude)||Math.abs(j.latitude)>90||Math.abs(j.longitude)>180)throw new Error("応答格子が不正");
-  const byModel={}, quality=[];
+  const byModel={}, quality=[], unavailableSeries=[];
   MODELS.forEach(m=>{
     byModel[m.id]={};
     VARS.split(",").forEach(v=> {
       const key=`${v}_${m.id}`,a=h[key];
-      if(!Array.isArray(a)){byModel[m.id][v]=null;return;}
-      if(unitMismatch(j.hourly_units,key,v)){quality.push(`${key}:単位不一致`);byModel[m.id][v]=null;return;}
+      const unit=j.hourly_units?.[key]??j.hourly_units?.[v];
+      // APIの文字列undefined＋全nullは未提供の形。値がある場合は単位異常として拒否。
+      if((a===null||(Array.isArray(a)&&a.length===times.length&&a.every(x=>x===null)))&&typeof unit==="string"&&unit.trim().toLowerCase()==="undefined"){
+        unavailableSeries.push(key);byModel[m.id][v]=null;return;
+      }
+      if(!Array.isArray(a)){if(a!=null)quality.push(`${key}:配列形式不正`);byModel[m.id][v]=null;return;}
       if(a.length!==times.length)quality.push(`${key}:配列長${a.length}/${times.length}`);
+      if(unitMismatch(j.hourly_units,key,v)){quality.push(`${key}:単位不一致`);byModel[m.id][v]=null;return;}
       const bad=a.filter(x=>x!=null&&!plausible(v,x)).length;
       if(bad)quality.push(`${key}:異常値${bad}`);
       byModel[m.id][v]=times.map((_,i)=>plausible(v,a[i])?a[i]:null);
@@ -967,7 +972,7 @@ function shape(j){
   const dates=[];for(let d=first;d<=last;d+=86400000)dates.push(new Date(d).toISOString().slice(0,10));
   return {
     meta:{lat:j.latitude, lng:j.longitude, elev:finite(j.elevation)?j.elevation:null, gen:j.generationtime_ms, tz:j.timezone, fetched:new Date()},
-    times, byModel, dates, daily, quality
+    times, byModel, dates, daily, quality, unavailableSeries
   };
 }
 
@@ -1010,13 +1015,21 @@ function precipSources(idx){return idx.map(i=>({time:DATA.times[i]??null,...sour
 function bandTrace(vn,idx,kind="max",ids){const t=sourceStats(vn,idx,ids);return t.n?sourceLabel(t[kind+"Rows"],true):"—";}
 function detailPayload(){
  const d=DATA, L=currentLevels();
- return {version:FETCHER_VERSION,request:d.request,meta:d.meta,gsiElev:d.gsiElev,gsiHsrc:d.gsiHsrc,elevSrc:d.elevSrc,nearestGrid:d.nearestGrid,modelIds:d.modelIds,hourlyUnits:d.hourlyUnits,responseKeys:d.responseKeys,quality:d.quality,levels:L,times:d.times,byModel:d.byModel,daily:d.daily,ensemble:d.ens,airQuality:d.aq,modelInitialization:null};
+ return {version:FETCHER_VERSION,request:d.request,meta:d.meta,gsiElev:d.gsiElev,gsiHsrc:d.gsiHsrc,elevSrc:d.elevSrc,nearestGrid:d.nearestGrid,modelIds:d.modelIds,hourlyUnits:d.hourlyUnits,responseKeys:d.responseKeys,quality:d.quality,unavailableSeries:d.unavailableSeries,levels:L,times:d.times,byModel:d.byModel,daily:d.daily,ensemble:d.ens,airQuality:d.aq,modelInitialization:null};
+}
+// 表示単位は有効値を提供したモデルの確認済み単位のみ。生単位はJSONに保持。
+function detailUnit(v,i){
+ const units=DATA.hourlyUnits, expected=expectedUnit(v), active=MODELS.filter(m=>finite(DATA.byModel[m.id][v]?.[i]));
+ if(!active.length)return "有効値なし";
+ const actual=active.map(m=>units[v+"_"+m.id]??units[v]);
+ if(expected&&actual.every(u=>typeof u==="string"&&u.trim()&&!unitMismatch({[v]:u},v,v)))return expected;
+ return expected?expected+"・単位一部未返却":"単位未確認";
 }
 function renderDetail(){
  if(!DATA||!FOCUS||!$("#detail-panel").open)return;
  const L=currentLevels(), vars=$("#detail-var").value==="all"?VARS.split(","):["wind_speed_"+L.main+"hPa",...(L.bracket?["wind_speed_"+L.sub+"hPa"]:[]),"wind_gusts_10m","relative_humidity_"+L.rhTop+"hPa","cloud_cover_low","cloud_cover_mid","cloud_cover_high","precipitation","temperature_2m","apparent_temperature","cape","weather_code"];
  const step=Number($("#detail-step").value), lines=[`${FETCHER_VERSION} ${DATA.request.name} ${FOCUS} JST / 取得 ${jst(DATA.meta.fetched)}JST / 入力 ${DATA.request.lat},${DATA.request.lng} / API格子 ${DATA.meta.lat},${DATA.meta.lng}`,"モデル順 E/G/Gs/M/I（指定ID："+DATA.modelIds.join(",")+"）・—=欠測。単位は取得JSON参照。初期時刻不明。"];
- for(let h=0;h<24;h+=step){const i=idxAt(FOCUS,h);lines.push(String(h).padStart(2,"0")+"時");for(const v of vars){const t=sourceStats(v,[i]);const med=t.n?`${t.median}:${t.medianKind==="2値平均"?"平均("+sourceLabel(t.medianRows)+")":sourceLabel(t.medianRows)}`:"—";const raw=valsAt(v,i).map(x=>x??"—").join("/");const unit=DATA.hourlyUnits[v]||MODELS.map(m=>DATA.hourlyUnits[v+"_"+m.id]).find(Boolean)||"単位未返却";const scalar=!/^(weather_code|wind_direction_)/.test(v);lines.push(` ${v} [${unit}] ${raw}${scalar?` | med=${med} min=${t.min??"—"}:${sourceLabel(t.minRows)} max=${t.max??"—"}:${sourceLabel(t.maxRows)}`:" | 生値のみ（集計は別規則）"} n=${t.n}`);}}
+ for(let h=0;h<24;h+=step){const i=idxAt(FOCUS,h);lines.push(String(h).padStart(2,"0")+"時");for(const v of vars){const t=sourceStats(v,[i]);const med=t.n?`${t.median}:${t.medianKind==="2値平均"?"平均("+sourceLabel(t.medianRows)+")":sourceLabel(t.medianRows)}`:"—";const raw=valsAt(v,i).map(x=>x??"—").join("/");const unit=detailUnit(v,i);const scalar=!/^(weather_code|wind_direction_)/.test(v);lines.push(` ${v} [${unit}] ${raw}${scalar?` | med=${med} min=${t.min??"—"}:${sourceLabel(t.minRows)} max=${t.max??"—"}:${sourceLabel(t.maxRows)}`:" | 生値のみ（集計は別規則）"} n=${t.n}`);}}
  lines.push("時間帯別：極値の由来モデル・発生時刻（@）／単一モデル降水累計（部分はMAX比較対象外）");
  for(const [nm,a,b] of [["早朝",0,7],["午前",7,11],["午後",11,15],["夕方",15,19],["夜",19,24]]){const idx=bandIdx(FOCUS,a,b);lines.push(` ${nm} 極値: ${bandSourceLine(idx,L,true)}`);const totals=MODELS.map(m=>{const vv=idx.map(i=>DATA.byModel[m.id].precipitation?.[i]).filter(finite);return {short:m.short,n:vv.length,v:vv.length?vv.reduce((a,b)=>a+b,0):null};});const full=totals.filter(t=>t.n===idx.length);const mx=full.length?Math.max(...full.map(t=>t.v)):null;lines.push(` ${nm}: ${totals.map(t=>`${t.short}=${t.v==null?"—":t.v.toFixed(2)}${t.n!==idx.length?`(部分${t.n}/${idx.length}h)`:""}`).join(" ")} / 単一モデル累計MAX ${mx==null?"—":mx.toFixed(2)+":"+full.filter(t=>t.v===mx).map(t=>t.short).join("+")}`);}
  $("#detail-text").textContent=lines.join("\n");
@@ -1394,14 +1407,15 @@ function renderSummary(){
   s+=`座標照合: ${v?(v.ok?v.okText:v.ngText+"＝山頂を外してる疑い、予報前に座標確認推奨"):"照合なし（独立GSI照合なし＝ソナ側でDEM裏取り推奨）"}\n`;
   s+=`※✓は標高差の照合のみ。山名同一性の保証ではない。\n`;
   s+=`取得 ${jst(f)}JST(全球6h更新目安・モデル初期時刻不明) / 全${DATA.dates.length}日分（要求${SEL.days}日）\n`;
-  if(DATA.quality.length)s+=`⚠ API応答異常 ${DATA.quality.length}系列（該当値は欠測扱い・詳細JSON quality）\n`;
+  if(DATA.quality.length)s+=`⚠ API応答異常 ${DATA.quality.length}件（該当値は欠測扱い・詳細JSON quality）\n`;
+  if(DATA.unavailableSeries.length)s+=`参考: 単位未定義・全欠測 ${DATA.unavailableSeries.length}系列（未提供形式・詳細JSON unavailableSeries）\n`;
   if(!Object.keys(DATA.hourlyUnits).length)s+=`⚠ API単位情報未返却（要求単位で暫定表示・要確認）\n`;
   if(DATA.dates.length!==SEL.days||DATA.times.length!==SEL.days*24)s+=`⚠ 時刻/日数不足：取得${DATA.times.length}時刻／要求${SEL.days*24}時刻\n`;
   s+=`モデル順: ECMWF / GFS / GSM / MSM / ICON（5モデル）\n`;
   s+=`由来 E/G/Gs/M/I、+=同値、全=5モデル同値。帯の由来は風/温min/max・突/雲max・体min。雨MAXは各時刻MAXの和（単一モデル累計ではない）。未丸め値で比較。詳細に発生時刻・中央値由来・全モデル生値。記号は合成判定。\n`;
   s+=`稜線の風の読み: ${lvlNote}\n`;
   s+=`集計表示: このテキストは中央値とMAXを常に併記（括弧 MAX=悲観・割れた日に最悪を拾う値）※画面の表はプルダウンで片方表示だが、ソナへの素材は両方渡す\n`;
-  s+=`集計の読み方: 気温=5モデルのレンジ(最小-最大＝予報の割れ幅) ／ 稜線風=気圧面により3〜5モデル(800hPaはECMWF/GSM欠で3) ／ 体感=最も冷える値(min) ／ 突風・CAPE=最大(安全側) ／ 雲・降水・3時間刻みの風=中央値（括弧でMAX併記） ／ 風向=循環平均（⚠割れ=モデル間で風向が定まらない＝前線・気圧の谷通過のサイン、方向を鵜呑みにしない） ／ 3時間刻みの湿=山頂面の湿度%（${RH_GAS_FLOOR}以上でガス圏＝何時からガス化/抜けるかを時刻で読む）\n`;
+  s+=`集計の読み方: 気温=5モデルのレンジ(最小-最大＝予報の割れ幅) ／ 稜線風=気圧面により3〜5モデル(800hPaはECMWF/GSM欠で3) ／ 体感=最も冷える値(min) ／ 突風・CAPE=最大(安全側・突風はE/G/Iの3モデルが実取得例) ／ 雲・降水・3時間刻みの風=中央値（括弧でMAX併記） ／ 風向=循環平均（⚠割れ=モデル間で風向が定まらない＝前線・気圧の谷通過のサイン、方向を鵜呑みにしない） ／ 3時間刻みの湿=山頂面の湿度%（${RH_GAS_FLOOR}以上でガス圏＝何時からガス化/抜けるかを時刻で読む）\n`;
   s+=`天気記号の注意: weather_codeは雲量+降水から算出（梅雨は湿度高で弱雨が出やすい）。記号は降水の強度(mm/h)で判定し、ごく弱い霧雨(0.1mm/h未満)は曇りに丸めるので合計降水mmが少量でも記号は曇りのことがある。快晴☀️/晴れ🌤️/薄曇り⛅/曇り☁️は区別。行動判断は降水量mm＋低層雲%を優先。雷⛈️は同時刻に2モデル以上が発雷を示した時のみ表示（降水0mmでも雷だけ立つことあり＝CAPE/CINで別判断）。MAX側は単独モデルの雷も⛈️で出す（悲観値＝割れの検知が役割。2モデル同時刻ルールは中央値側の乱発防止）。山頂面の湿度80%以上の時間帯は晴れ判定でも🌫️側へ補正（地形性ガス対策・挟み帯2,250〜3,000m峰は山頂に近い側の面=≥2,450mなら700hPaで判定）\n`;
   s+=`追加データ: ${DATA.ens?`アンサンブル最大${ensCount()}配列(GFS+ECMWF)で降水確率・雷の芽(CAPE超過率)を併記`:`アンサンブル=取得なし`} ／ ${DATA.aq?`AODで遠望クリア度(雲とは別軸の遠景の霞み)`:`遠望AOD=取得なし`}。いずれもsurface系で、稜線風は従来どおり決定論モデルで読む（800hPa面はGFS/MSM/ICONの3モデル。アンサンブルは800hPa風を欠くため）\n`;
   s+=`\n■ 総観（気圧配置・前線・台風・複数日の流れ）\n  ※ここはソナがWeb確認で補完する欄\n`;
@@ -1443,7 +1457,7 @@ function renderSummary(){
       const cloudStr=(cloudM===cloudX)?cloudM:`${cloudM}（MAX ${cloudX}）`;
       const pc=withMode('median',()=>bandSum("precipitation",idx));
       const partial=pc.n<pc.total?`（部分${pc.n}/${pc.total}h）`:"";
-      const pstrM=ppM==null?"降水欠測":pc.n<pc.total?`${ppM.toFixed(1)}mm${partial}`:ptype==="なし"?"降水なし":`${ptype}${ppM.toFixed(1)}mm`;
+      const pstrM=ppM==null?"降水欠測":pc.n<pc.total?`${ppM.toFixed(1)}mm${partial}`:ptype==="なし"?(ppM===0?"降水なし":`微量降水${ppM.toFixed(ppM<0.1?2:1)}mm（雨雪判定閾値未満）`):`${ptype}${ppM.toFixed(1)}mm`;
       const pstr=(ppM==null||ppX==null||Math.abs(ppM-ppX)<0.05)?pstrM:`${pstrM}（MAX ${ppX.toFixed(1)}mm）`;
       const wsym=((wcM===wcX)?wcode(wcM):`${wcode(wcM)}（MAX ${wcode(wcX)}）`)+((!auditM.rainComplete||!auditM.snowComplete)&&[wcM,wcX].some(c=>c>=51&&c<95)?"（雨雪種別不確実）":"");
       s+=`  ${nm}(${rg}時): ${dstr}${wstr}${gstr}${subW} / ${tstr}℃${astr} / 雲 ${cloudStr} / ${pstr} / ${wsym}\n`;
@@ -1451,10 +1465,10 @@ function renderSummary(){
     });
 
     // 日単位の有効値数（変数ごと・構造上の欠測を除く期待数は旧仕様）
-    const expected=v=>v.includes("800hPa")?3:v==="cape"?3:["convective_inhibition","freezing_level_height"].includes(v)?1:5;
+    const expected=v=>v.includes("800hPa")?3:["cape","wind_gusts_10m"].includes(v)?3:["convective_inhibition","freezing_level_height"].includes(v)?1:5;
     const dayIdx=bandIdx(date,0,24);
     const missing=VARS.split(",").map(v=>{const counts=dayIdx.map(i=>valsAt(v,i).filter(finite).length);const n=Math.min(...counts),mx=Math.max(...counts),e=expected(v);return n<e?`${v}:${n}–${mx}/${e}`:null;}).filter(Boolean);
-    if(missing.length)s+=`⚠ 欠測（時刻別有効数の最小–最大/旧期待数）: ${missing.join(" / ")}\n`;
+    if(missing.length)s+=`⚠ 欠測（時刻別有効数の最小–最大/参考期待数）: ${missing.join(" / ")}\n`;
     // 3時間刻み
     s+=`■ 3時間刻み（中央値／括弧でMAX併記・突風(10m)は最大・由来順=風/突/低雲/湿/雨・風${L.main}・湿=山頂面${L.rhTop||L.main}hPaの湿度%＝${RH_GAS_FLOOR}以上でガス圏）\n`;
     [3,6,9,12,15,18,21].forEach(h=>{
