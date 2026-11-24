@@ -194,7 +194,7 @@ td:first-child,th:first-child{text-align:left}
 td.band{font-family:var(--display);font-weight:600;color:var(--frost)}
 td.band small{display:block;font-family:var(--mono);font-weight:400;font-size:10px;color:var(--mist-dim)}
 td .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
-#tbl td.band,#tbl th:first-child{white-space:nowrap}
+#tbl td.band,#tbl th:first-child,#tbl th:nth-child(3){white-space:nowrap}
 #tbl td.weather,#tbl td.precip{white-space:nowrap}
 #tbl .brief-warn{display:block;color:var(--warn);font-size:10px;line-height:1.3}
 #band-detail{margin-top:10px;font-size:12px;color:var(--mist)}
@@ -221,13 +221,13 @@ footer a{color:var(--mist)}
 
   <p class="eyebrow">multi-model ridge weather</p>
   <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.3</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
-  <p class="sub">山を指定 → 5モデル（ECMWF / GFS / JMA GSM / MSM / ICON）の稜線気象を取得。判断はソナ（チャット）が組む。</p>
+  <p class="sub">山を指定 → 5モデルの山岳予報を取得。ソナに渡して山行判断へ。</p>
 
   <!-- INPUT -->
   <div class="panel">
     <div class="row">
       <label class="fld" style="flex:1 1 100%">
-        <span>よく登る山</span>
+        <span>登録済みの山</span>
         <select id="preset"></select>
       </label>
     </div>
@@ -272,17 +272,17 @@ footer a{color:var(--mist)}
 
     <div class="panel">
       <div class="sum-head">
-        <p class="panel-head" style="margin:0">📊 時間帯別サマリー <span class="hint">選択日・全モデルの幅</span></p>
+        <p class="panel-head" style="margin:0">📊 時間帯別サマリー <span class="hint" id="table-date"></span></p>
         <select id="agg">
           <option value="median">中央値</option>
           <option value="max">MAX</option>
         </select>
       </div>
       <div class="tbl-scroll"><table id="tbl"></table></div>
-      <p class="cape-foot">降水は表示時間帯の実積算（mm）。※不足＝一部欠測・モデル不足。注意表示・1時間MAX・雨雪内訳は下の詳細へ。</p>
-      <details id="band-detail"><summary>降水・危険信号の詳細（選択日）</summary><p>⚠は注意信号であり、気象警報ではありません。降水MAX＝いずれかのモデルで直前1時間の降水が0.1mm以上（中央値0mmでも表示）。着氷・雹・雷＝生の天気コードに信号あり。不足＝有効モデル・時刻不足等。下の数値・時刻・由来モデルで確認してください。</p><div id="band-detail-body"></div></details>
+      <p class="cape-foot">降水は時間帯の合計（mm）。※不足＝データ不足。注意情報・雨雪内訳は下の詳細へ。</p>
+      <details id="band-detail"><summary>降水・注意情報の詳細</summary><p>⚠は気象警報ではなく、注意情報です。降水MAX＝代表天気が降水を示さなくても、いずれかのモデルで1時間0.1mm以上（中央値0mmでも表示）。着氷・雹・雷＝いずれかのモデルが予測。不足＝モデル・時刻などのデータ不足。量・時刻・モデルを確認してください。</p><p>中央値：基本の予測。MAX：大きい値・悪天側の予測を確認。降水MAX合計は各時刻の最大値の合計（単一モデルの累計とは別）。風速・気温は予測範囲、突風・CAPEは最大、体感は最低を常に表示。降水は雪などの水換算量を含みます。</p><p>モデル略号：E＝ECMWF、G＝GFS、Gs＝GSM、M＝MSM、I＝ICON。</p><div id="band-detail-body"></div></details>
       <p class="cape-foot">☁️ 雲の低/中/高は高さ帯（低〜3km・中3-8km・高8km〜）。眺望のカギは<b style="color:var(--frost)">低層雲</b>。</p>
-      <p class="cape-foot">🧭 矢印＝風の向かう先（北風↓）・色と大きさ＝強さ。<b style="color:var(--frost)">方位名は逆</b>（＝吹いてくる向き）。</p>
+      <p class="cape-foot">🧭 矢印＝風が進む方向（北風↓）。方位名＝吹いてくる方向。色・大きさ＝強さ。</p>
     </div>
 
     <div class="panel">
@@ -295,21 +295,22 @@ footer a{color:var(--mist)}
     </div>
 
     <div class="panel">
-      <details id="detail-panel"><summary>🔎 モデル別詳細（選択日のみ・追加通信なし）</summary>
-        <div class="row" style="margin-top:12px"><label class="fld"><span>時刻間隔</span><select id="detail-step"><option value="3">3時間</option><option value="1">1時間</option></select></label><label class="fld"><span>項目</span><select id="detail-var"><option value="core">主要項目</option><option value="all">全取得変数</option></select></label></div>
-        <button class="btn-ghost" id="detail-copy">詳細をコピー</button> <button class="btn-ghost" id="detail-json">取得記録JSON保存</button>
+      <details id="detail-panel"><summary>🔎 モデル別データ</summary>
+        <div class="row" style="margin-top:12px"><label class="fld"><span>時刻間隔</span><select id="detail-step"><option value="3">3時間</option><option value="1">1時間</option></select></label><label class="fld"><span>項目</span><select id="detail-var"><option value="core">主要項目</option><option value="all">全項目</option></select></label></div>
+        <button class="btn-ghost" id="detail-copy">詳細をコピー</button> <button class="btn-ghost" id="detail-json">データ保存（JSON）</button>
         <pre id="detail-text" style="white-space:pre-wrap;overflow:auto;max-height:420px;font-size:12px"></pre>
       </details>
     </div>
     <div class="panel">
-      <p class="panel-head">⛈ 雷：燃料 CAPE と蓋 CIN <span class="hint">CAPE=3モデル午後最大／CIN=GFS日中中央値</span></p>
+      <p class="panel-head">⛈ 雷の目安：CAPE・CIN <span class="hint">CAPE＝午後最大／CIN＝日中中央値</span></p>
       <div class="cape-grid" id="cape"></div>
-      <p class="cape-foot">CAPEは雷の燃料、CINは発雷を抑える蓋（小さいほど薄い）。<b style="color:var(--frost)">CAPE大 × CIN小 × 午後の日射</b>が揃う時が雷の本番。蓋が厚い日はCAPEが高くても持ちやすい。</p>
+      <p class="cape-foot">CAPEは大気の不安定さ、CINは対流を抑える力。<b style="color:var(--frost)">CAPE大 × CIN小 × 午後の日射</b>は雷の目安。CAPEが低くても雷の可能性は残る。</p>
     </div>
 
     <div class="panel">
-      <p class="panel-head" id="spread-head">🌬 稜線の風 <span class="hint">山頂高度の面で一致度を見る（バーが狭い＝高確度）</span></p>
+      <p class="panel-head" id="spread-head">🌬 稜線の風 <span class="hint">山頂付近の風の予測幅</span></p>
       <div id="spread"></div>
+      <p class="cape-foot">バーが狭いほど予測値が近い（的中を保証しない）。— は一致度を判定できない場合。</p>
       <div class="scale-legend">
         <i><span class="swatch" style="background:var(--sky)"></span>〜8</i>
         <i><span class="swatch" style="background:var(--calm)"></span>〜15</i>
@@ -1050,15 +1051,16 @@ function realPrecip(date,h0,h1){
  const p=stats("precipitation"),rain=stats("rain"),snow=stats("snowfall"), peak=sourceStats("precipitation",idx);
  return {labels:intervalLabels(date,h0,h1),p,rain,snow,peak:peak.max,peakRows:peak.maxRows};
 }
-function realPrecipText(date,h0,h1,mode="both"){
+function precipHourLabel(t){const h=Number(t.slice(11,13)),d=h===0?datePlus(t.slice(0,10),-1):t.slice(0,10);return `${Number(d.slice(5,7))}/${Number(d.slice(8,10))} ${h===0?23:h-1}〜${h===0?24:h}時`;}
+function realPrecipText(date,h0,h1,mode="both",human=false){
  const d=realPrecip(date,h0,h1),fmt=v=>v==null?"欠測":String(Math.round(v*1000)/1000),part=o=>`[${o.n}/${o.total}h・${o.minModels}–${o.maxModels}/5モデル${o.complete?"":"・不足"}]`;
  const val=(o,u)=>`${fmt(mode==="max"?o.max:o.median)}${(mode==="max"?o.max:o.median)==null?"":u}${mode==="both"&&o.max!=null?` (MAX ${fmt(o.max)}${u})`:""}${part(o)}`;
  const peaks=d.peakRows?.map(r=>`${r.time??""}`).filter(Boolean)||[];
- const peak=d.peak!=null&&d.peak>0?` / 1h MAX ${fmt(d.peak)}mm${peaks.length?" 終端"+[...new Set(peaks)].map(t=>`${t.slice(5,10)} ${t.slice(11,16)}:${compactSources(d.peakRows.filter(r=>r.time===t))}`).join(","):""}`:"";
+ const peak=d.peak!=null&&d.peak>0?` / 1h MAX ${fmt(d.peak)}mm${peaks.length?(human?" ":" 終端")+[...new Set(peaks)].map(t=>`${human?precipHourLabel(t):t.slice(5,10)+" "+t.slice(11,16)}:${compactSources(d.peakRows.filter(r=>r.time===t))}`).join(","):""}`:"";
  const pv=mode==="max"?d.p.max:d.p.median,rv=mode==="max"?d.rain.max:d.rain.median,sv=mode==="max"?d.snow.max:d.snow.median;
  const all=d.p.complete&&d.rain.complete&&d.snow.complete;
  const note=pv==null?"（降水欠測）":!all?"":pv===0&&d.p.max===0&&d.rain.max===0&&d.snow.max===0?"（降水なし）":pv>0&&rv===0&&sv===0?"（降水・種別未確定）":pv>0&&precipType(rv,sv,null,d.p.total)==="なし"?"（微量降水・雨雪判定閾値未満）":"";
- return `実時間降水 ${val(d.p,"mm")}${note} / 雨 ${val(d.rain,"mm")} / 雪 ${val(d.snow,"cm")}${peak}`;
+ return `${human?"合計降水量":"実時間降水"} ${val(d.p,"mm")}${note} / 雨 ${val(d.rain,"mm")} / 雪 ${val(d.snow,"cm")}${peak}`;
 }
 function expectedCount(v){return v.includes("800hPa")?3:["cape","wind_gusts_10m"].includes(v)?3:["convective_inhibition","freezing_level_height"].includes(v)?1:5;}
 function fullCoverage(v,idx){return idx.length>0&&idx.every(i=>valsAt(v,i).filter(finite).length>=expectedCount(v));}
@@ -1292,8 +1294,8 @@ function renderMeta(){
   const v=demVerdict();
   if(v){
     elevTag = v.ok
-      ? `<span class="tag" style="color:var(--calm);border-color:rgba(86,197,150,.35)">${v.okText}</span>`
-      : `<span class="tag note">${v.ngText}・座標要確認</span>`;
+      ? `<span class="tag" style="color:var(--calm);border-color:rgba(86,197,150,.35)" title="登録標高との比較です。山頂座標の正しさを保証しません。">${v.okText.replace("標高照合OK","標高差150m以内")}</span>`
+      : `<span class="tag note">${v.ngText}</span>`;
   }
   // 選択中の山（DB/プリセット）はrank・別名も表示
   const selBadge = (SEL && SEL.source!=="manual" && SEL.rank!=null) ? rankBadge(SEL.rank) : "";
@@ -1305,40 +1307,39 @@ function renderMeta(){
     const bits=[];
     if(DATA.ens){
       const pPM=ensRealPrecip(FOCUS,11,15), cP=ensCapeProb(FOCUS,11,15,ENS_CAPE_MOD);
-      if(pPM.value!=null) bits.push(`午後の実時間降水あり率 ${ensText(pPM)}`);
-      if(cP!=null) bits.push(`雷の芽(CAPE≥${ENS_CAPE_MOD}) ${ensText(ensProbability(DATA.ens.cape,FOCUS,11,15,ENS_CAPE_MOD))}`);
+      if(pPM.value!=null) bits.push(`午後の降水あり率 ${ensText(pPM)}`);
+      if(cP!=null) bits.push(`CAPE≥${ENS_CAPE_MOD} ${ensText(ensProbability(DATA.ens.cape,FOCUS,11,15,ENS_CAPE_MOD))}`);
     }
     if(DATA.aq){const a=aqBand(FOCUS,9,15);if(a)bits.push(`遠望 ${aodText(FOCUS,9,15,a)}`);}
-    if(bits.length) probLine=`<div class="coords">📊 ${bits.join(" ／ ")}${DATA.ens?` <span style="opacity:.5">(アンサンブル最大${ensCount()}配列)</span>`:""}</div>`;
+    if(bits.length) probLine=`<div class="coords" title="降水あり率・CAPE超過率は有効な予測の割合。0%でも現地の雷や降水を否定できません。">📊 ${bits.join(" ／ ")}${DATA.ens?` <span style="opacity:.5">(最大${ensCount()}通り)</span>`:""}</div>`;
   }
   $("#meta").innerHTML=`
     <div class="place">📍 ${esc(placeName)}${selBadge}${selAlias}</div>
-    <div class="coords">${rc.summit?`📍山頂 ${rc.lat.toFixed(4)}, ${rc.lng.toFixed(4)}`:`grid ${rc.lat.toFixed(3)}, ${rc.lng.toFixed(3)}`} · ${m.elev!=null?fmtElev(m.elev):"標高—"}${DATA.elevSrc?` <span style="opacity:.55">(${DATA.elevSrc})</span>`:""}${(!rc.summit&&rc.model)?` <span style="opacity:.55">(${rc.model}が最寄り)</span>`:""}</div>
+    <div class="coords">${rc.summit?`📍山頂 ${rc.lat.toFixed(4)}, ${rc.lng.toFixed(4)}`:`予報格子 ${rc.lat.toFixed(3)}, ${rc.lng.toFixed(3)}`} · ${m.elev!=null?fmtElev(m.elev):"標高—"}${DATA.elevSrc?` <span style="opacity:.55">(${DATA.elevSrc})</span>`:""}${(!rc.summit&&rc.model)?` <span style="opacity:.55">(${rc.model}が最寄り)</span>`:""}</div>
     ${sun?`<div class="coords">☀ 日の出 ${hhmm(sun.sunrise)} ／ 🌙 日の入 ${hhmm(sun.sunset)}</div>`:''}
     ${probLine}
     <div class="fresh">
       ${DATA.warnings.map(w=>`<span class="tag note">⚠ ${esc(w)}</span>`).join("")}
       <span class="tag">取得 ${jst(f)} JST</span>
-      <span class="tag">全球モデルは6h更新＝鮮度の目安</span>
+      <span class="tag" title="取得時刻はモデル更新時刻ではありません。更新間隔はモデルにより異なります。">モデル更新時刻不明</span>
       ${(!rc.summit&&rc.km!=null&&rc.km>=2)?`<span class="tag note">⚠ 最寄り格子 ~${Math.round(rc.km)}km</span>`:''}
       ${elevTag}
     </div>`;
 }
 
+function dayLabel(d){const dt=new Date(d+"T00:00");return `${dt.getMonth()+1}/${dt.getDate()}(${["日","月","火","水","木","金","土"][dt.getDay()]})`;}
 function renderDays(){
   const w=$("#days-tabs"); w.innerHTML="";
   DATA.dates.forEach(d=>{
     const b=document.createElement("button");
     b.className="day-tab"+(d===FOCUS?" active":"");
-    const dt=new Date(d+"T00:00");
-    const wd=["日","月","火","水","木","金","土"][dt.getDay()];
-    b.textContent=`${dt.getMonth()+1}/${dt.getDate()}(${wd})`;
+    b.textContent=dayLabel(d);
     const record=DATA; b.onclick=()=>{ if(DATA!==record)return; FOCUS=d; renderDays(); renderMeta(); renderFocus(); };
     w.appendChild(b);
   });
 }
 
-function renderFocus(){ renderSpread(); renderCape(); renderTable(); renderSummary(); renderDetail(); }
+function renderFocus(){ $("#table-date").textContent=dayLabel(FOCUS); $("#detail-panel summary").textContent=`🔎 モデル別データ（${dayLabel(FOCUS)}）`; renderSpread(); renderCape(); renderTable(); renderSummary(); renderDetail(); }
 
 function spreadRows(level){
   const hours=[3,6,9,12,15,18,21];
@@ -1379,14 +1380,14 @@ function renderSpread(){
   const head=$("#spread-head");
   const P=lv=>PLEVELS[lv]||{altShort:"",models:MODELS.length};
   if(L.bracket){
-    if(head) head.innerHTML=`🌬 稜線の風 ${L.main}＋${L.sub}hPa で挟む <span class="hint">${P(L.main).altShort}と${P(L.sub).altShort}・山頂はこの間（${P(L.main).models}/${P(L.sub).models}モデル）</span>`;
+    if(head) head.innerHTML=`🌬 稜線の風 ${L.main}＋${L.sub}hPa で挟む <span class="hint">${P(L.main).altShort}と${P(L.sub).altShort}・山頂はこの間（参考${P(L.main).models}/${P(L.sub).models}モデル）</span>`;
     const a=spreadRows(L.main), b=spreadRows(L.sub);
     let html="";
     if(a) html+=`<p class="lvl-tag">${L.main}hPa（${P(L.main).altShort}・${P(L.main).models}モデル）</p>`+a;
     if(b) html+=`<p class="lvl-tag" style="margin-top:16px">${L.sub}hPa（${P(L.sub).altShort}・${P(L.sub).models}モデル）</p>`+b;
     $("#spread").innerHTML=html||'<p style="color:var(--mist);font-size:13px">この日の該当データが無いよ。</p>';
   }else{
-    if(head) head.innerHTML=`🌬 稜線の風 ${L.main}hPa <span class="hint">${P(L.main).alt}・${P(L.main).models}モデルの一致度（バーが狭い＝高確度）</span>`;
+    if(head) head.innerHTML=`🌬 稜線の風 ${L.main}hPa <span class="hint">${P(L.main).alt}・参考${P(L.main).models}モデル・予測幅</span>`;
     const a=spreadRows(L.main);
     let html=a||"";
     const b=spreadRows(L.sub);
@@ -1434,7 +1435,7 @@ function renderTable(){
   const mainKey="wind_speed_"+L.main+"hPa", mainDir="wind_direction_"+L.main+"hPa";
   const windHdr=L.bracket?`風${L.main}/${L.sub}・突風 m/s`:`風${L.main}hPa・突風 m/s`;
   const bands=[["早朝","〜7時",0,7],["午前","7〜11時",7,11],["午後","11〜15時",11,15],["夕方","15〜19時",15,19],["夜","19時〜",19,24]];
-  let html=`<thead><tr><th>時間帯</th><th>天気</th><th>降水 mm</th><th>${windHdr}</th><th>気温・体感 ℃</th><th>雲 低/中/高 %</th><th>CAPE</th></tr></thead><tbody>`;
+  let html=`<thead><tr><th>時間帯</th><th>天気</th><th title="時間帯の合計降水量（mm）">降水計 mm</th><th>${windHdr}</th><th>気温・体感 ℃</th><th>雲 低/中/高 %</th><th>CAPE</th></tr></thead><tbody>`;
   let extra="", flagged=false;
   bands.forEach(([nm,rng,h0,h1])=>{
     const idx=bandIdx(FOCUS,h0,h1);
@@ -1473,7 +1474,7 @@ function renderTable(){
     if(hazardParts.some(x=>x.includes("不足")||x.includes("不確実")))flags.push("不足");
     // 代表記号が降水を示さない場合も、実時間のピークの存在を短く残す。
     const briefRain=(actual.peak??0)>=PRECIP_RATE_FLOOR;
-    const detailText=realPrecipText(FOCUS,h0,h1,AGG_MODE);
+    const detailText=realPrecipText(FOCUS,h0,h1,AGG_MODE,true);
     extra+=`<p><b>${nm}（${rng}）</b><br>${esc(detailText)}${hazards?`<br>⚠ ${esc(hazards)}`:""}</p>`;
     // CAPE: GFS/ECMWF/ICON max
     let cmax=null; idx.forEach(i=>CAPE_MODELS.forEach(mid=>{const a=DATA.byModel[mid].cape;if(a&&a[i]!=null)cmax=(cmax==null?a[i]:Math.max(cmax,a[i]));}));
@@ -1499,7 +1500,7 @@ function renderTable(){
   });
   $("#tbl").innerHTML=html+"</tbody>";
   $("#band-detail-body").innerHTML=extra;
-  $("#band-detail summary").textContent=flagged?"⚠ 降水・危険信号の詳細（選択日）":"降水・危険信号の詳細（選択日）";
+  $("#band-detail summary").textContent=`${flagged?"⚠ ":""}降水・注意情報の詳細（${dayLabel(FOCUS)}）`;
 }
 
 // サマリーテキスト用：指定気圧面の時刻別モデル一致度行（モデル順 E/G/Gs/M/I）
