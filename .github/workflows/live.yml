@@ -1,0 +1,46 @@
+name: Sona v3.3 live API smoke test
+on:
+  push:
+    branches: [verify-v3.3]
+    paths: [.github/workflows/live.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: test "$(git hash-object index.html)" = '808c5f5b79ac5768d1b233ef3b77b30de9dc72cf'
+      - run: npm install --no-save --no-package-lock jsdom@26.1.0
+      - name: Live responses through candidate fetch and render pipeline (not browser CORS)
+        run: |
+          node <<'JS'
+          const fs=require("fs"),{JSDOM}=require("jsdom");
+          const dom=new JSDOM(fs.readFileSync("index.html","utf8"),{runScripts:"dangerously",url:"https://ishicoroservice.github.io/sona-forecast2/",beforeParse(w){
+            w.fetch=async(url,opts)=>{
+              const c=new AbortController();
+              if(opts?.signal?.aborted)c.abort();else opts?.signal?.addEventListener("abort",()=>c.abort(),{once:true});
+              const u=new URL(url);
+              try {const r=await fetch(url,{signal:c.signal});console.log(u.hostname,u.pathname,"HTTP",r.status);return r;}
+              catch(e){console.log(u.hostname,u.pathname,"ERROR",e.cause?.code||e.name);throw e;}
+            };
+          }});
+          (async()=>{
+            const w=dom.window,q=s=>w.document.querySelector(s);
+            const names=[["飯縄山",3,"800"],["常念岳",3,"800"],["槍ヶ岳",7,"700"]];let bad=0;
+            for(const [name,days,level] of names){
+              q("#preset").value=String([...q("#preset").options].findIndex(o=>o.textContent.startsWith(name+" (")));
+              w.applyPreset();q("#days").value=String(days);await w.fetchForecast();
+              if(q("#copy").disabled){console.log(JSON.stringify({name,accepted:false,status:q("#status").textContent}));bad++;continue;}
+              const d=w.detailPayload();
+              console.log(JSON.stringify({name,version:d.version,accepted:true,times:d.times.length,requestedDays:days,main:d.levels.main,rhTop:d.levels.rhTop,gsi:d.gsiElev,sent:d.request.elevationSent,responseElev:d.meta.responseElev,grid:[d.meta.lat,d.meta.lng],quality:d.quality,missingUnits:d.missingUnits.length,unavailableSeries:d.unavailableSeries.length,warnings:d.warnings,ensemble:!!d.ensemble,ensMeta:d.ensemble?.meta,aq:!!d.airQuality,aqMeta:d.airQuality?.meta}));
+              if(d.levels.main!==level||d.times.length!==days*24||d.gsiElev==null||d.meta.responseElev==null||d.quality.length||d.missingUnits.length||d.warnings.length||!d.ensemble||!d.airQuality)bad++;
+            }
+            dom.window.close();if(bad)process.exitCode=1;
+          })().catch(e=>{console.error(e);dom.window.close();process.exitCode=1});
+          JS
