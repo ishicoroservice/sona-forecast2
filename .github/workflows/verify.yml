@@ -2,7 +2,7 @@ name: Sona v3.2 verification
 on:
   push:
     branches: [verify-v3.2]
-    paths: [test_fetcher.js, audit_dem.js]
+    paths: [test_fetcher.base.js, test_fetcher.patch.gz, audit_dem.js, .github/workflows/verify.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,9 +15,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verify input and test source
+      - name: Verify input and reconstruct exact regression test
         run: |
-          echo '906e1a4b1ba8c55b50167fbcbec91a3e94bb6c35' | grep -Fx "$(git hash-object index.html)"
+          test "$(git hash-object index.html)" = '906e1a4b1ba8c55b50167fbcbec91a3e94bb6c35'
+          test "$(git hash-object test_fetcher.base.js)" = '60497656c82200a02b8c33c46caee9e2782a48b2'
+          test "$(git hash-object test_fetcher.patch.gz)" = '7bd8c983ca0f0c5fb16676b334fa590c384b71f0'
+          cp test_fetcher.base.js test_fetcher.js
+          gzip -dc test_fetcher.patch.gz | git apply --unidiff-zero
           echo '8cd98b7ccd92cf16014d266536291ea02ee10659bafbeead307150348c7f5024  test_fetcher.js' | sha256sum -c
       - run: npm install --no-save --no-package-lock jsdom@26.1.0
       - run: node test_fetcher.js
@@ -29,5 +33,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Audit DEM
-        run: node audit_dem.js
+      - name: Verify source and GSI connectivity
+        run: |
+          test "$(git hash-object index.html)" = '906e1a4b1ba8c55b50167fbcbec91a3e94bb6c35'
+          test "$(git hash-object audit_dem.js)" = 'b3513e50066788a1df26e40aceb96ae8aa00ba7d'
+          node -e 'fetch("https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=137.6475&lat=36.3419444&outtype=JSON",{signal:AbortSignal.timeout(20000)}).then(async r=>{if(!r.ok)throw Error("HTTP "+r.status);const j=await r.json();if(!Number.isFinite(parseFloat(j.elevation)))throw Error("DEM missing");console.log("GSI preflight:",j)}).catch(e=>{console.error(e);process.exit(1)})'
+      - name: Audit DEM and require full coverage
+        run: |
+          set -o pipefail
+          node audit_dem.js | tee dem.log
+          grep -F '== MEIZAN 331座 DEM照合 ==' dem.log
+          grep -F '== PRESETS 18座 DEM照合 ==' dem.log
+          if grep -F 'DEM取得不可' dem.log; then echo 'Incomplete DEM coverage'; exit 1; fi
+          echo 'All requested DEM entries returned; coordinate warnings require review.'
