@@ -1500,7 +1500,7 @@ function renderTable(){
   });
   $("#tbl").innerHTML=html+"</tbody>";
   $("#band-detail-body").innerHTML=extra;
-  $("#band-detail summary").textContent=`${flagged?"⚠ ":""}降水・注意情報の詳細（${dayLabel(FOCUS)}）`;
+  $("#band-detail summary").textContent=`${flagged?"⚠ ":""}降水・注意情報の詳細：${dayLabel(FOCUS)}`;
 }
 
 // サマリーテキスト用：指定気圧面の時刻別モデル一致度行（モデル順 E/G/Gs/M/I）
