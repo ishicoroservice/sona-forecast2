@@ -220,7 +220,7 @@ footer a{color:var(--mist)}
 <div class="wrap">
 
   <p class="eyebrow">multi-model ridge weather</p>
-  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.3-rc2</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
+  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.3-rc3</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
   <p class="sub">山を指定 → 5モデル（ECMWF / GFS / JMA GSM / MSM / ICON）の稜線気象を取得。判断はソナ（チャット）が組む。</p>
 
   <!-- INPUT -->
@@ -279,7 +279,7 @@ footer a{color:var(--mist)}
         </select>
       </div>
       <div class="tbl-scroll"><table id="tbl"></table></div>
-      <p class="cape-foot">降水は表示時間帯の実積算（mm）。※不足＝一部欠測・モデル不足。危険信号・1時間MAX・雨雪内訳・旧ラベル値は下の詳細へ。</p>
+      <p class="cape-foot">降水は表示時間帯の実積算（mm）。※不足＝一部欠測・モデル不足。危険信号・1時間MAX・雨雪内訳は下の詳細へ。</p>
       <details id="band-detail"><summary>降水・危険信号の詳細（選択日）</summary><div id="band-detail-body"></div></details>
       <p class="cape-foot">☁️ 雲の低/中/高は高さ帯（低〜3km・中3-8km・高8km〜）。眺望のカギは<b style="color:var(--frost)">低層雲</b>。</p>
       <p class="cape-foot">🧭 矢印＝風の向かう先（北風↓）・色と大きさ＝強さ。<b style="color:var(--frost)">方位名は逆</b>（＝吹いてくる向き）。</p>
@@ -1055,20 +1055,23 @@ function realPrecipText(date,h0,h1,mode="both"){
  const val=(o,u)=>`${fmt(mode==="max"?o.max:o.median)}${(mode==="max"?o.max:o.median)==null?"":u}${mode==="both"&&o.max!=null?` (MAX ${fmt(o.max)}${u})`:""}${part(o)}`;
  const peaks=d.peakRows?.map(r=>`${r.time??""}`).filter(Boolean)||[];
  const peak=d.peak!=null&&d.peak>0?` / 1h MAX ${fmt(d.peak)}mm${peaks.length?" 終端"+[...new Set(peaks)].map(t=>`${t.slice(5,10)} ${t.slice(11,16)}:${compactSources(d.peakRows.filter(r=>r.time===t))}`).join(","):""}`:"";
- return `実時間降水 ${val(d.p,"mm")} / 雨 ${val(d.rain,"mm")} / 雪 ${val(d.snow,"cm")}${peak}`;
+ const pv=mode==="max"?d.p.max:d.p.median,rv=mode==="max"?d.rain.max:d.rain.median,sv=mode==="max"?d.snow.max:d.snow.median;
+ const all=d.p.complete&&d.rain.complete&&d.snow.complete;
+ const note=pv==null?"（降水欠測）":!all?"":pv===0&&d.p.max===0&&d.rain.max===0&&d.snow.max===0?"（降水なし）":pv>0&&rv===0&&sv===0?"（降水・種別未確定）":pv>0&&precipType(rv,sv,null,d.p.total)==="なし"?"（微量降水・雨雪判定閾値未満）":"";
+ return `実時間降水 ${val(d.p,"mm")}${note} / 雨 ${val(d.rain,"mm")} / 雪 ${val(d.snow,"cm")}${peak}`;
 }
 function expectedCount(v){return v.includes("800hPa")?3:["cape","wind_gusts_10m"].includes(v)?3:["convective_inhibition","freezing_level_height"].includes(v)?1:5;}
 function fullCoverage(v,idx){return idx.length>0&&idx.every(i=>valsAt(v,i).filter(finite).length>=expectedCount(v));}
-function hazardNotes(idx){
+function hazardNotes(idx,pidx=idx){
  const groups=[["着氷霧",[48]],["着氷性降水",[56,57,66,67]],["雹を伴う雷",[96,99]],["雷",[95,96,99]]];const notes=[];
  for(const [label,codes] of groups){const rows=idx.map(i=>({i,models:MODELS.filter(m=>codes.includes(DATA.byModel[m.id].weather_code?.[i])).map(m=>m.short)})).filter(x=>x.models.length);if(rows.length)notes.push(label+"信号 "+rows.map(x=>DATA.times[x.i].slice(11,13)+"時:"+x.models.join("+")).join(","));}
- const peaks=idx.map(i=>({i,values:valsAt("precipitation",i).filter(finite)})).filter(x=>x.values.some(v=>v>=PRECIP_RATE_FLOOR));
- if(peaks.length){const peak=Math.max(...peaks.flatMap(x=>x.values));const at=peaks.filter(x=>Math.max(...x.values)===peak).map(x=>DATA.times[x.i].slice(11,13)+"時");notes.push(`降水1h MAX ${peak}mm @${at.join(",")}（直前1h）`);}
- if(!fullCoverage("precipitation",idx))notes.push("降水モデル/時刻不足");
+ const peaks=pidx.map(i=>({i,values:valsAt("precipitation",i).filter(finite)})).filter(x=>x.values.some(v=>v>=PRECIP_RATE_FLOOR));
+ if(peaks.length){const peak=Math.max(...peaks.flatMap(x=>x.values));const at=peaks.filter(x=>Math.max(...x.values)===peak).map(x=>DATA.times[x.i].slice(5,10)+" "+DATA.times[x.i].slice(11,13)+"時");notes.push(`降水1h MAX ${peak}mm @${at.join(",")}（直前1h）`);}
+ if(!fullCoverage("precipitation",pidx))notes.push("降水モデル/時刻不足");
  if(!fullCoverage("weather_code",idx))notes.push("天気コード不足");
  const L=currentLevels();if(!fullCoverage("relative_humidity_"+L.rhTop+"hPa",idx)||!fullCoverage("cloud_cover_low",idx)||!fullCoverage("wind_speed_"+L.main+"hPa",idx))notes.push("風/湿度/雲の有効数不足・好条件判定保留");
- const snow=idx.some(i=>valsAt("snowfall",i).some(v=>finite(v)&&v>SNOW_FLOOR));
- if(snow&&!fullCoverage("rain",idx))notes.push("降雪あり・雨雪種別不確実");
+ const snow=pidx.some(i=>valsAt("snowfall",i).some(v=>finite(v)&&v>SNOW_FLOOR));
+ if(snow&&!fullCoverage("rain",pidx))notes.push("降雪あり・雨雪種別不確実");
  return notes.join("／");
 }
 function guardedSea(low,top,mid,topAlt,midAlt,idx,topLv,midLv){
@@ -1103,16 +1106,16 @@ function sourceLabel(rows,withTime=false){
   const groups=new Map();for(const m of models){const hrs=[...new Set(rows.filter(r=>r.short===m).map(r=>Number(r.time.slice(11,13))))].sort((a,b)=>a-b), spans=[];for(const h of hrs){const last=spans.at(-1);if(last&&last[1]+1===h)last[1]=h;else spans.push([h,h]);}const key=spans.map(([a,b])=>a===b?String(a):`${a}-${b}`).join(",");groups.set(key,[...(groups.get(key)||[]),m]);}return [...groups].map(([h,ms])=>ms.join("+")+"@"+h).join(";");
 }
 function compactSources(rows){const codes=sourceLabel(rows);return codes==="E+G+Gs+M+I"?"全":codes||"—";}
-function bandSourceLine(idx,L,withTime=false){
+function bandSourceLine(idx,L,withTime=false,pidx=idx){
  const tr=(v,k="max")=>{const t=sourceStats(v,idx);return withTime?(sourceLabel(t[k+"Rows"],true)||"—"):compactSources(t[k+"Rows"]);}, wind="wind_speed_"+L.main+"hPa";
- const rainTrace=precipSources(idx).filter(t=>t.max!=null&&t.max>0).map(t=>`${t.time.slice(11,13)}:${compactSources(t.maxRows)}`).join(" ");
+ const rainTrace=precipSources(pidx).filter(t=>t.max!=null&&t.max>0).map(t=>`${t.time.slice(5,10)} ${t.time.slice(11,13)}:${compactSources(t.maxRows)}`).join(" ");
  return `風 ${tr(wind,"min")}/${tr(wind)}${L.bracket?` 挟${tr("wind_speed_"+L.sub+"hPa","min")}/${tr("wind_speed_"+L.sub+"hPa")}`:""} 突${tr("wind_gusts_10m")} 温${tr("temperature_2m","min")}/${tr("temperature_2m")} 体${tr("apparent_temperature","min")} 雲${tr("cloud_cover_low")}/${tr("cloud_cover_mid")}/${tr("cloud_cover_high")}${rainTrace?" 雨MAX寄与 "+rainTrace:""}`;
 }
 function precipSources(idx){return idx.map(i=>({time:DATA.times[i]??null,...sourceStats("precipitation",[i])}));}
 function bandTrace(vn,idx,kind="max",ids){const t=sourceStats(vn,idx,ids);return t.n?sourceLabel(t[kind+"Rows"],true):"—";}
 function detailPayload(){
  const d=DATA, L=currentLevels();
- return {version:FETCHER_VERSION,request:d.request,meta:d.meta,gsiElev:d.gsiElev,gsiHsrc:d.gsiHsrc,elevSrc:d.elevSrc,nearestGrid:d.nearestGrid,modelIds:d.modelIds,hourlyUnits:d.hourlyUnits,responseKeys:d.responseKeys,quality:d.quality,unavailableSeries:d.unavailableSeries,warnings:d.warnings,missingUnits:d.missingUnits,levels:L,precipitationConvention:{hourly:"preceding_1h",actionBand:"end_labels_(start,end]",legacyBand:"labels_[start,end)",finalHourMissing:"partial_no_zero_fill"},times:d.times,byModel:d.byModel,daily:d.daily,ensemble:d.ens,airQuality:d.aq,modelInitialization:null};
+ return {version:FETCHER_VERSION,request:d.request,meta:d.meta,gsiElev:d.gsiElev,gsiHsrc:d.gsiHsrc,elevSrc:d.elevSrc,nearestGrid:d.nearestGrid,modelIds:d.modelIds,hourlyUnits:d.hourlyUnits,responseKeys:d.responseKeys,quality:d.quality,unavailableSeries:d.unavailableSeries,warnings:d.warnings,missingUnits:d.missingUnits,levels:L,precipitationConvention:{hourly:"preceding_1h",actionBand:"end_labels_(start,end]",weatherSymbolBand:"point_labels_[start,end)",finalHourMissing:"partial_no_zero_fill"},times:d.times,byModel:d.byModel,daily:d.daily,ensemble:d.ens,airQuality:d.aq,modelInitialization:null};
 }
 // 表示単位は有効値を提供したモデルの確認済み単位のみ。生単位はJSONに保持。
 function detailUnit(v,i){
@@ -1127,8 +1130,8 @@ function renderDetail(){
  const L=currentLevels(), vars=$("#detail-var").value==="all"?VARS.split(","):["wind_speed_"+L.main+"hPa",...(L.bracket?["wind_speed_"+L.sub+"hPa"]:[]),"wind_gusts_10m","relative_humidity_"+L.rhTop+"hPa","cloud_cover_low","cloud_cover_mid","cloud_cover_high","precipitation","temperature_2m","apparent_temperature","cape","weather_code"];
  const step=Number($("#detail-step").value), lines=[`${FETCHER_VERSION} ${DATA.request.name} ${FOCUS} JST / 取得 ${jst(DATA.meta.fetched)}JST / 入力 ${DATA.request.lat},${DATA.request.lng} / API格子 ${DATA.meta.lat},${DATA.meta.lng}`,"モデル順 E/G/Gs/M/I（指定ID："+DATA.modelIds.join(",")+"）・—=欠測。単位は取得JSON参照。初期時刻不明。"];
  for(let h=0;h<24;h+=step){const i=idxAt(FOCUS,h);lines.push(String(h).padStart(2,"0")+"時");for(const v of vars){const t=sourceStats(v,[i]);const med=t.n?`${t.median}:${t.medianKind==="2値平均"?"平均("+sourceLabel(t.medianRows)+")":sourceLabel(t.medianRows)}`:"—";const raw=valsAt(v,i).map(x=>x??"—").join("/");const unit=detailUnit(v,i);const scalar=!/^(weather_code|wind_direction_)/.test(v);lines.push(` ${v} [${unit}] ${raw}${scalar?` | med=${med} min=${t.min??"—"}:${sourceLabel(t.minRows)} max=${t.max??"—"}:${sourceLabel(t.maxRows)}`:" | 生値のみ（集計は別規則）"} n=${t.n}`);}}
- lines.push("時間帯別：極値の由来モデル・発生時刻（@）／単一モデル降水累計（部分はMAX比較対象外）");
- for(const [nm,a,b] of [["早朝",0,7],["午前",7,11],["午後",11,15],["夕方",15,19],["夜",19,24]]){const idx=bandIdx(FOCUS,a,b);lines.push(` ${nm} 極値: ${bandSourceLine(idx,L,true)}`);const totals=MODELS.map(m=>{const vv=idx.map(i=>DATA.byModel[m.id].precipitation?.[i]).filter(finite);return {short:m.short,n:vv.length,v:vv.length?vv.reduce((a,b)=>a+b,0):null};});const full=totals.filter(t=>t.n===idx.length);const mx=full.length?Math.max(...full.map(t=>t.v)):null;lines.push(` ${nm}: ${totals.map(t=>`${t.short}=${t.v==null?"—":t.v.toFixed(2)}${t.n!==idx.length?`(部分${t.n}/${idx.length}h)`:""}`).join(" ")} / 単一モデル累計MAX ${mx==null?"—":mx.toFixed(2)+":"+full.filter(t=>t.v===mx).map(t=>t.short).join("+")}`);}
+ lines.push("時間帯別：極値の由来モデル・発生時刻（@）／実時間の単一モデル降水累計（mm・部分はMAX比較対象外）");
+ for(const [nm,a,b] of [["早朝",0,7],["午前",7,11],["午後",11,15],["夕方",15,19],["夜",19,24]]){const idx=bandIdx(FOCUS,a,b),pidx=intervalIdx(DATA.times,FOCUS,a,b);lines.push(` ${nm} 極値: ${bandSourceLine(idx,L,true,pidx)}`);const totals=MODELS.map(m=>{const vv=pidx.map(i=>DATA.byModel[m.id].precipitation?.[i]).filter(finite);return {short:m.short,n:vv.length,v:vv.length?vv.reduce((a,b)=>a+b,0):null};});const full=totals.filter(t=>t.n===idx.length);const mx=full.length?Math.max(...full.map(t=>t.v)):null;lines.push(` ${nm}: ${totals.map(t=>`${t.short}=${t.v==null?"—":t.v.toFixed(2)}${t.n!==idx.length?`(部分${t.n}/${idx.length}h)`:""}`).join(" ")} / 単一モデル累計MAX ${mx==null?"—":mx.toFixed(2)+":"+full.filter(t=>t.v===mx).map(t=>t.short).join("+")}`);}
  $("#detail-text").textContent=lines.join("\n");
 }
 async function copyDetail(){if(!DATA||!$("#detail-panel").open)return;const record=DATA;renderDetail();try{await navigator.clipboard.writeText($("#detail-text").textContent);}catch(e){if(DATA===record)setStatus("詳細コピー不可：詳細欄を選択してコピーしてね。",true);}}
@@ -1218,7 +1221,7 @@ function ensProbability(members,date,h0,h1,thr,realInterval=false){
 }
 function ensRealPrecip(date,h0,h1){return ensProbability(DATA.ens?.precip,date,h0,h1,ENS_PRECIP_MM,true);}
 function ensCapeProb(date,h0,h1,thr){return ensProbability(DATA.ens?.cape,date,h0,h1,thr).value;}
-function ensPrecipProb(date,h0,h1){return ensProbability(DATA.ens?.precip,date,h0,h1,ENS_PRECIP_MM).value;}
+function ensPrecipProb(date,h0,h1){return ensRealPrecip(date,h0,h1).value;}
 function ensCount(){ return DATA.ens?Math.max(DATA.ens.cape.length,DATA.ens.precip.length,DATA.ens.temp.length,DATA.ens.cloudLow.length,...Object.values(DATA.ens.wind).map(a=>a.length)):0; }
 function ensText(o){return o.value==null?`—(有効${o.n}/${o.total})`:`${o.value}%${o.n!==o.total?`(有効${o.n}/${o.total})`:""}`;}
 // AOD値→遠望クリア度バンド
@@ -1460,20 +1463,18 @@ function renderTable(){
     // 雲: 低/中/高 をモデル間中央値（平均は0/100%の外れ値に弱い・眺望は低層雲が鍵）
     const medVar=(vn)=>{const a=[];idx.forEach(i=>valsAt(vn,i).forEach(v=>{if(v!=null)a.push(v);}));return a.length?Math.round(agg(a)):null;};
     const cLow=medVar("cloud_cover_low"), cMid=medVar("cloud_cover_mid"), cHigh=medVar("cloud_cover_high");
-    // 人間向けの表は実時間の総降水だけ。旧ラベル・全内訳は詳細へ。
-    const ps=bandSum("precipitation",idx), pSum=ps.value;
+    // 人間向けの表は実時間の総降水だけ。内訳は詳細へ。
     const actual=realPrecip(FOCUS,h0,h1), ap=actual.p, pv=AGG_MODE==="max"?ap.max:ap.median;
-    const hazards=hazardNotes(idx), hazardParts=hazards.split("／").filter(Boolean);
+    const hazards=hazardNotes(idx,intervalIdx(DATA.times,FOCUS,h0,h1)), hazardParts=hazards.split("／").filter(Boolean);
     const flags=[];
     if(hazardParts.some(x=>x.startsWith("着氷")))flags.push("着氷");
     if(hazardParts.some(x=>x.startsWith("雹")))flags.push("雹");
     else if(hazardParts.some(x=>x.startsWith("雷信号")))flags.push("雷");
     if(hazardParts.some(x=>x.includes("不足")||x.includes("不確実")))flags.push("不足");
-    const legacyPeak=sourceStats("precipitation",idx).max;
-    // 代表記号が降水を示さない場合も、実時間・旧ラベルのピークの存在を短く残す。
-    const briefRain=Math.max(actual.peak??0,legacyPeak??0)>=PRECIP_RATE_FLOOR;
+    // 代表記号が降水を示さない場合も、実時間のピークの存在を短く残す。
+    const briefRain=(actual.peak??0)>=PRECIP_RATE_FLOOR;
     const detailText=realPrecipText(FOCUS,h0,h1,AGG_MODE);
-    extra+=`<p><b>${nm}（${rng}）</b><br>${esc(detailText)}<br>旧ラベル ${pSum==null?"欠測":pSum.toFixed(1)+"mm"}${ps.n<ps.total?`（部分${ps.n}/${ps.total}h）`:""}${hazards?`<br>⚠ ${esc(hazards)}`:""}</p>`;
+    extra+=`<p><b>${nm}（${rng}）</b><br>${esc(detailText)}${hazards?`<br>⚠ ${esc(hazards)}`:""}</p>`;
     // CAPE: GFS/ECMWF/ICON max
     let cmax=null; idx.forEach(i=>CAPE_MODELS.forEach(mid=>{const a=DATA.byModel[mid].cape;if(a&&a[i]!=null)cmax=(cmax==null?a[i]:Math.max(cmax,a[i]));}));
     // 天気: 最悪コード
@@ -1524,7 +1525,6 @@ function renderSummary(){
   const avg   =(vn,idx)=>{let s=0,n=0;idx.forEach(i=>valsAt(vn,i).forEach(v=>{if(v!=null){s+=v;n++;}}));return n?s/n:null;}; // 雲海判定の低層雲・湿度（早朝の代表値）
   const maxOf =(vn,idx)=>{let x=null;idx.forEach(i=>valsAt(vn,i).forEach(v=>{if(v!=null)x=(x==null?v:Math.max(x,v));}));return x;}; // 突風など「最悪値」を見る項目用
   const minOf =(vn,idx)=>{let x=null;idx.forEach(i=>valsAt(vn,i).forEach(v=>{if(v!=null)x=(x==null?v:Math.min(x,v));}));return x;}; // 体感など「最も厳しい値」用
-  const sumMed=(vn,idx)=>bandSum(vn,idx).value; // 降水：各時刻の中央値を合計
   const r=v=>v==null?"—":Math.round(v);
   const WD=["日","月","火","水","木","金","土"];
 
@@ -1567,7 +1567,7 @@ function renderSummary(){
   s+=`稜線の風の読み: ${lvlNote}\n`;
   s+=`集計表示: このテキストは中央値とMAXを常に併記（括弧 MAX=悲観・割れた日に最悪を拾う値）※画面の表はプルダウンで片方表示だが、ソナへの素材は両方渡す\n`;
   s+=`集計の読み方: 気温=有効モデルのレンジ(最小-最大＝予報の割れ幅) ／ 稜線風=参考3〜5モデル(800hPaはECMWF/GSM欠で通常3・長期はさらに減る場合あり) ／ 体感=最も冷える値(min) ／ 突風・CAPE=最大(安全側・突風はE/G/Iの3モデルが実取得例) ／ 雲・降水・3時間刻みの風=中央値（括弧でMAX併記） ／ 風向=循環平均（⚠割れ=モデル間で風向が定まらない＝前線・気圧の谷通過のサイン、方向を鵜呑みにしない） ／ 3時間刻みの湿=山頂面の湿度%（${RH_GAS_FLOOR}以上でガス圏＝何時からガス化/抜けるかを時刻で読む）\n`;
-  s+=`降水積算注意：行動判断は各帯の「実時間降水」を優先（午前7–11時は08〜11時ラベル）。旧ラベル集計は従来比較・代表天気記号用（午前7–11時は実積算6–10時、早朝は前日23–当日6時）。翌日00時がない最終夜は部分累計。3時間刻みは直前1時間値。危険フラグと1時間ピークは代表記号と独立。\n`;
+  s+=`降水積算：表示時間帯の累計（午前7–11時は08〜11時の終端値）。翌日00時がない最終夜は部分累計。3時間刻みは直前1時間値。代表天気記号は各帯の時刻値から従来どおり判定し、降水実量・危険フラグを優先する。\n`;
   s+=`天気記号の注意: weather_codeは雲量+降水から算出（梅雨は湿度高で弱雨が出やすい）。記号は降水の強度(mm/h)で判定し、ごく弱い霧雨(0.1mm/h未満)は曇りに丸めるので合計降水mmが少量でも記号は曇りのことがある。快晴☀️/晴れ🌤️/薄曇り⛅/曇り☁️は区別。行動判断は降水量mm＋低層雲%を優先。雷⛈️は同時刻に2モデル以上が発雷を示した時のみ表示（降水0mmでも雷だけ立つことあり＝CAPE/CINで別判断）。MAX側は単独モデルの雷も⛈️で出す（悲観値＝割れの検知が役割。2モデル同時刻ルールは中央値側の乱発防止）。山頂面の湿度80%以上の時間帯は晴れ判定でも🌫️側へ補正（地形性ガス対策・挟み帯2,250〜3,000m峰は山頂に近い側の面=≥2,450mなら700hPaで判定）\n`;
   s+=`追加データ: ${DATA.ens?`アンサンブル最大${ensCount()}配列(GFS+ECMWF)で降水確率・雷の芽(CAPE超過率)を併記`:`アンサンブル=取得なし`} ／ ${DATA.aq?`AODで遠望クリア度(雲とは別軸の遠景の霞み)`:`遠望AOD=取得なし`}。いずれもsurface系で、稜線風は従来どおり決定論モデルで読む（800hPa面はGFS/MSM/ICONが参考3モデル（有効数は時刻別）。アンサンブルは800hPa風を欠くため）\n`;
   s+=`\n■ 総観（気圧配置・前線・台風・複数日の流れ）\n  ※ここはソナがWeb確認で補完する欄\n`;
@@ -1596,27 +1596,19 @@ function renderSummary(){
       // 変動項目（雲・降水・天気）は中央値とMAXを両方算出して併記
       const clM=withMode('median',()=>med("cloud_cover_low",idx)), cmM=withMode('median',()=>med("cloud_cover_mid",idx)), chM=withMode('median',()=>med("cloud_cover_high",idx));
       const clX=withMode('max',()=>med("cloud_cover_low",idx)), cmX=withMode('max',()=>med("cloud_cover_mid",idx)), chX=withMode('max',()=>med("cloud_cover_high",idx));
-      const ppM=withMode('median',()=>sumMed("precipitation",idx)), ppX=withMode('max',()=>sumMed("precipitation",idx));
-      const rainM=withMode('median',()=>sumMed("rain",idx)), snowM=withMode('median',()=>sumMed("snowfall",idx));
+      const pidx=intervalIdx(DATA.times,date,h0,h1);
       const auditM={},auditX={}; const wcM=withMode('median',()=>worstWeatherCode(idx,auditM)), wcX=withMode('max',()=>worstWeatherCode(idx,auditX));
       const wstr=wmn==null?"—":r(wmn)+"-"+r(wmx);
       const gstr=gmx==null?"":` 突${r(gmx)}`;
       const tstr=tmn==null?"—":r(tmn)+"-"+r(tmx);
       const astr=amn==null?"":`(体感${r(amn)})`;
       const dstr=dir==null?"":dirName(dir)+((dirR!=null&&dirR<DIR_SPLIT_R)?"⚠割れ":"")+" ";
-      let ptype=precipType(bandSum("rain",idx).n===idx.length?rainM:null,bandSum("snowfall",idx).n===idx.length?snowM:null,wcM,idx.length);
-      if(ptype==="なし"&&ppM>0&&((rainM??0)+(snowM??0)===0))ptype="降水（種別未確定）";
-      if(ptype==="欠測"&&ppM!=null)ptype="降水（雨雪種別不確実）";
       const cloudM=`${r(clM)}/${r(cmM)}/${r(chM)}`, cloudX=`${r(clX)}/${r(cmX)}/${r(chX)}`;
       const cloudStr=(cloudM===cloudX)?cloudM:`${cloudM}（MAX ${cloudX}）`;
-      const pc=withMode('median',()=>bandSum("precipitation",idx));
-      const partial=pc.n<pc.total?`（部分${pc.n}/${pc.total}h）`:"";
-      const pstrM=ppM==null?"降水欠測":pc.n<pc.total?`${ppM.toFixed(1)}mm${partial}`:ptype==="なし"?(ppM===0?(fullCoverage("precipitation",idx)&&fullCoverage("rain",idx)&&fullCoverage("snowfall",idx)?"降水なし":"0mm（部分モデル・未確認）"):`微量降水${ppM.toFixed(ppM<0.1?2:1)}mm（雨雪判定閾値未満）`):`${ptype}${ppM.toFixed(1)}mm`;
-      const pstr=(ppM==null||ppX==null||Math.abs(ppM-ppX)<0.05)?pstrM:`${pstrM}（MAX ${ppX.toFixed(1)}mm）`;
       const wsym=((wcM===wcX)?wcode(wcM):`${wcode(wcM)}（MAX ${wcode(wcX)}）`)+((!auditM.rainComplete||!auditM.snowComplete)&&[wcM,wcX].some(c=>c>=51&&c<95)?"（雨雪種別不確実）":"");
-      s+=`  ${nm}(${rg}時): ${dstr}${wstr}${gstr}${subW} / ${tstr}℃${astr} / 雲 ${cloudStr} / 旧ラベル降水:${pstr} / ${wsym}\n    ${realPrecipText(date,h0,h1)}\n`;
-      const hazards=hazardNotes(idx);if(hazards)s+=`    ⚠ ${hazards}\n`;
-      s+=`    由来 ${bandSourceLine(idx,L)}${auditM.reason!=="ランク集計"||auditX.reason!=="ランク集計"?` 記号:${auditM.reason??"欠測"}/${auditX.reason??"欠測"}`:""}\n`;
+      s+=`  ${nm}(${rg}時): ${dstr}${wstr}${gstr}${subW} / ${tstr}℃${astr} / 雲 ${cloudStr} / ${wsym}\n    ${realPrecipText(date,h0,h1)}\n`;
+      const hazards=hazardNotes(idx,pidx);if(hazards)s+=`    ⚠ ${hazards}\n`;
+      s+=`    由来 ${bandSourceLine(idx,L,false,pidx)}${auditM.reason!=="ランク集計"||auditX.reason!=="ランク集計"?` 記号:${auditM.reason??"欠測"}/${auditX.reason??"欠測"}`:""}\n`;
     });
 
     // 日単位の有効値数（変数ごと・構造上の欠測を除く期待数は旧仕様）
@@ -1714,10 +1706,9 @@ function renderSummary(){
     // アンサンブル確率（fail-soft：取得できた日だけ・surface系）
     if(DATA.ens){
       const eb=[["早朝",0,7],["午前",7,11],["午後",11,15],["夕",15,19],["夜",19,24]];
-      const pops=eb.map(([nm,a,b])=>`${nm}${ensText(ensProbability(DATA.ens.precip,date,a,b,ENS_PRECIP_MM))}`);
       const cMod=ensCapeProb(date,11,15,ENS_CAPE_MOD), cStr=ensCapeProb(date,11,15,ENS_CAPE_STR);
       s+=`■ アンサンブル確率（GFS+ECMWF 最大${ensCount()}配列（変数別有効数は各行）・surface系）\n`;
-      if(pops.length) s+=`  降水あり率(旧ラベル・1時刻でも≥${ENS_PRECIP_MM}mm/h): ${pops.join(" / ")}\n  実時間降水あり率: ${eb.map(([nm,a,b])=>`${nm}${ensText(ensRealPrecip(date,a,b))}`).join(" / ")}\n`;
+      s+=`  実時間降水あり率(1時間でも≥${ENS_PRECIP_MM}mm/h): ${eb.map(([nm,a,b])=>`${nm}${ensText(ensRealPrecip(date,a,b))}`).join(" / ")}\n`;
       s+=`  午後11-15時の不安定: CAPE≥${ENS_CAPE_MOD}を${ensText(ensProbability(DATA.ens.cape,date,11,15,ENS_CAPE_MOD))} ／ ≥${ENS_CAPE_STR}を${ensText(ensProbability(DATA.ens.cape,date,11,15,ENS_CAPE_STR))}（CIN・午後の日射と併せて発雷判断）\n`;
       // 連続変数のばらつき（p10-p90）：気温・稜線風(ピーク)・低層雲。午前/午後
       const wm=ensWindMembers();
