@@ -1,0 +1,10 @@
+--- a/test_fetcher.js
++++ b/test_fetcher.js
+@@ -433,6 +433,7 @@
+   T("降水ゼロでも欠測の注意は別表示",q("#tbl").querySelectorAll("td.weather")[1].textContent.includes("不足")&&!q("#tbl").querySelectorAll("td.weather")[1].textContent.includes("降水MAX"));
+   T("降水の表見出しは合計と明示",q("#tbl th:nth-child(3)").textContent==="降水計 mm"&&q("#tbl th:nth-child(3)").title.includes("合計降水量"));
+   T("日付が3見出しで一致",["#table-date","#band-detail summary","#detail-panel summary"].every(s=>q(s).textContent.includes(q(".day-tab.active").textContent)));
++  T("注意情報の日付はコロン区切り",q("#band-detail summary").textContent==="⚠ 降水・注意情報の詳細："+q(".day-tab.active").textContent);
+   T("日付境界の降水ピークは前日23〜24時",w.precipHourLabel("2026-07-05T00:00")==="7/4 23〜24時");
+   T("短い日数ラベルを維持",q("#days").parentElement.querySelector("span").textContent==="日数");
+   T("取得時刻とモデル更新時刻を区別",q("#meta").textContent.includes("モデル更新時刻不明")&&!q("#meta").textContent.includes("6h更新"));
