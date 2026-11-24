@@ -15,18 +15,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: test "$(git hash-object index.html)" = '808c5f5b79ac5768d1b233ef3b77b30de9dc72cf'
+      - run: test "$(git hash-object index.html)" = '38d08360f14b229e50944afff6324da4c150a9b7'
       - run: npm install --no-save --no-package-lock jsdom@26.1.0
       - name: Live responses through candidate fetch and render pipeline (not browser CORS)
         run: |
           node <<'JS'
           const fs=require("fs"),{JSDOM}=require("jsdom");
+          const execFile=require("util").promisify(require("child_process").execFile);
           const dom=new JSDOM(fs.readFileSync("index.html","utf8"),{runScripts:"dangerously",url:"https://ishicoroservice.github.io/sona-forecast2/",beforeParse(w){
             w.fetch=async(url,opts)=>{
               const c=new AbortController();
               if(opts?.signal?.aborted)c.abort();else opts?.signal?.addEventListener("abort",()=>c.abort(),{once:true});
               const u=new URL(url);
-              try {const r=await fetch(url,{signal:c.signal});console.log(u.hostname,u.pathname,"HTTP",r.status);return r;}
+              try {const {stdout}=await execFile("curl",["-4","-sS","--connect-timeout","6","--max-time","18","--write-out","\\n%{http_code}",url],{signal:c.signal,maxBuffer:16000000});const k=stdout.lastIndexOf("\n"),status=Number(stdout.slice(k+1));console.log(u.hostname,u.pathname,"HTTP",status);return {ok:status>=200&&status<300,status,json:async()=>JSON.parse(stdout.slice(0,k))};}
               catch(e){console.log(u.hostname,u.pathname,"ERROR",e.cause?.code||e.name);throw e;}
             };
           }});
