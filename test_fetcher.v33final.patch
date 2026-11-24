@@ -1,0 +1,26 @@
+--- a/test_fetcher.js
++++ b/test_fetcher.js
+@@ -342,7 +342,7 @@
+   await w.fetchForecast();T("AOD全欠測帯を省略せず表示",text().includes("午前欠測")&&text().includes("午後欠測"));
+   T("指定モデル数と実有効数を区別",text().includes("指定5モデル・実有効数は時刻別"));
+   sel.value=String(opts.findIndex(o=>o.textContent.startsWith("妙高山 (")));w.applyPreset();T("妙高山プリセットと既存DB座標一致",Number(q("#lat").value)===36.8913888&&Number(q("#lng").value)===138.1136111);
+-  T("開発版番号v3.3-rc3",q("h1 .ver").textContent==="v3.3-rc3");
++  T("正式版番号v3.3",q("h1 .ver").textContent==="v3.3");
+ 
+   console.log("== v3.3 監査再現・異常系 ==");
+   pickPreset("飯縄");q("#days").value="1";w.fetch=originalFetch;
+@@ -423,6 +423,14 @@
+   T("ENS未定義単位の数値は拒否",en.cloudLow[1].every(v=>v===null)&&en.meta.warnings.includes("cloud_cover_low_member02:単位不一致"));
+   T("ENS短い全nullは異常維持",en.meta.warnings.includes("cloud_cover_low_member03:配列長不一致")&&en.meta.warnings.includes("cloud_cover_low_member03:単位不一致"));
+   T("ENS正常値と真の異常値は従来どおり",en.cloudLow[3].every(v=>v===20)&&en.precip[0][10]===null&&en.meta.warnings.includes("precipitation_member01:異常値"));
++  q("#days").value="1";
++  await useMock(j=>{alter(j,"weather_code",()=>0);alter(j,"precipitation",(x,h,mi)=>h===9&&mi===1?0.6:0);alter(j,"rain",(x,h,mi)=>h===9&&mi===1?0.6:0);alter(j,"snowfall",()=>0);});
++  T("中央値0でも単独モデル降水MAXを保持",w.realPrecip(DATE,7,11).p.median===0&&w.realPrecip(DATE,7,11).p.max===0.6&&q("#tbl").querySelectorAll("td.weather")[1].textContent.includes("降水MAX")&&q("#tbl").querySelectorAll("td.precip")[1].querySelector(".num").textContent==="0.0");
++  T("詳細に注意表示の定義と由来モデル",q("#band-detail").textContent.includes("中央値0mmでも表示")&&q("#band-detail-body").textContent.includes("09:00:G")&&q("#band-detail-body").textContent.includes("1h MAX 0.6mm"));
++  await useMock(j=>{alter(j,"weather_code",()=>0);alter(j,"precipitation",()=>0);alter(j,"rain",()=>0);alter(j,"snowfall",()=>0);});
++  T("全モデル降水ゼロなら降水MAXなし",!q("#tbl").textContent.includes("降水MAX"));
++  await useMock(j=>{alter(j,"weather_code",()=>0);alter(j,"precipitation",(x,h,mi)=>mi===0?null:0);alter(j,"rain",()=>0);alter(j,"snowfall",()=>0);});
++  T("降水ゼロでも欠測の注意は別表示",q("#tbl").querySelectorAll("td.weather")[1].textContent.includes("不足")&&!q("#tbl").querySelectorAll("td.weather")[1].textContent.includes("降水MAX"));
+   console.log(`\n結果: ${pass} passed / ${fail} failed`);
+   process.exit(fail ? 1 : 0);
+ })().catch(e => { console.error("HARNESS ERROR:", e); process.exit(2); });

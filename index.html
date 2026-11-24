@@ -220,7 +220,7 @@ footer a{color:var(--mist)}
 <div class="wrap">
 
   <p class="eyebrow">multi-model ridge weather</p>
-  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.3-rc3</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
+  <h1>⛰ ソナ予報 フェッチャー <span class="ver">v3.3</span></h1><!-- 版ルール: 挙動仕様が変わる改修で0.1上げる（表示・管理はここ1箇所） -->
   <p class="sub">山を指定 → 5モデル（ECMWF / GFS / JMA GSM / MSM / ICON）の稜線気象を取得。判断はソナ（チャット）が組む。</p>
 
   <!-- INPUT -->
@@ -279,8 +279,8 @@ footer a{color:var(--mist)}
         </select>
       </div>
       <div class="tbl-scroll"><table id="tbl"></table></div>
-      <p class="cape-foot">降水は表示時間帯の実積算（mm）。※不足＝一部欠測・モデル不足。危険信号・1時間MAX・雨雪内訳は下の詳細へ。</p>
-      <details id="band-detail"><summary>降水・危険信号の詳細（選択日）</summary><div id="band-detail-body"></div></details>
+      <p class="cape-foot">降水は表示時間帯の実積算（mm）。※不足＝一部欠測・モデル不足。注意表示・1時間MAX・雨雪内訳は下の詳細へ。</p>
+      <details id="band-detail"><summary>降水・危険信号の詳細（選択日）</summary><p>⚠は注意信号であり、気象警報ではありません。降水MAX＝いずれかのモデルで直前1時間の降水が0.1mm以上（中央値0mmでも表示）。着氷・雹・雷＝生の天気コードに信号あり。不足＝有効モデル・時刻不足等。下の数値・時刻・由来モデルで確認してください。</p><div id="band-detail-body"></div></details>
       <p class="cape-foot">☁️ 雲の低/中/高は高さ帯（低〜3km・中3-8km・高8km〜）。眺望のカギは<b style="color:var(--frost)">低層雲</b>。</p>
       <p class="cape-foot">🧭 矢印＝風の向かう先（北風↓）・色と大きさ＝強さ。<b style="color:var(--frost)">方位名は逆</b>（＝吹いてくる向き）。</p>
     </div>
@@ -1479,7 +1479,7 @@ function renderTable(){
     let cmax=null; idx.forEach(i=>CAPE_MODELS.forEach(mid=>{const a=DATA.byModel[mid].cape;if(a&&a[i]!=null)cmax=(cmax==null?a[i]:Math.max(cmax,a[i]));}));
     // 天気: 最悪コード
     let wc=worstWeatherCode(idx);
-    if(briefRain&&(wc==null||wc<51))flags.push("降水");
+    if(briefRain&&(wc==null||wc<51))flags.push("降水MAX");
     if(flags.length||!ap.complete)flagged=true;
     const wcol=windColor(wmx);
     const arrow=dir==null?"":`<span style="color:${wcol};font-size:${windArrowSize(wmx)}px;line-height:1">${dirArrow(dir)}</span> `;
