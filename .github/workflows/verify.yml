@@ -1,0 +1,33 @@
+name: Sona v3.2 verification
+on:
+  push:
+    branches: [verify-v3.2]
+    paths: [test_fetcher.js, audit_dem.js]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  jsdom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify input and test source
+        run: |
+          echo '906e1a4b1ba8c55b50167fbcbec91a3e94bb6c35' | grep -Fx "$(git hash-object index.html)"
+          echo '8cd98b7ccd92cf16014d266536291ea02ee10659bafbeead307150348c7f5024  test_fetcher.js' | sha256sum -c
+      - run: npm install --no-save --no-package-lock jsdom@26.1.0
+      - run: node test_fetcher.js
+  dem:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit DEM
+        run: node audit_dem.js
