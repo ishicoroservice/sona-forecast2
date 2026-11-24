@@ -16,7 +16,7 @@ jobs:
           node-version: '22'
       - name: Verify exact candidate and test reconstruction
         run: |
-          test "$(git hash-object index.html)" = '6bf642fb52bd626142ecc78134dc835209e4e289'
+          test "$(git hash-object index.html)" = '538fa5e17b1d5c359dbebc08ce05b12155d3685e'
           cp test_fetcher.base.js test_fetcher.js
           gzip -dc test_fetcher.patch.gz | git apply --unidiff-zero
           echo '8cd98b7ccd92cf16014d266536291ea02ee10659bafbeead307150348c7f5024  test_fetcher.js' | sha256sum -c
@@ -34,5 +34,7 @@ jobs:
           echo '2f7bad91e85476c8d53b216b824cfe1a39dae6da30454f37085048c434dc2f05  test_fetcher.js' | sha256sum -c
           git apply test_fetcher.v33final.patch
           echo 'c1260dc52b5fec124357fce043bc6c116d0227e4e9c2bff703dfa530594bd3de  test_fetcher.js' | sha256sum -c
+          gzip -dc test_fetcher.ui.patch.gz | git apply
+          echo 'efe31c915ce05439be591d05f5f4453b8179d72cf0f53860d1ca6b12f0b25eb7  test_fetcher.js' | sha256sum -c
       - run: npm install --no-save --no-package-lock jsdom@26.1.0
       - run: node test_fetcher.js
