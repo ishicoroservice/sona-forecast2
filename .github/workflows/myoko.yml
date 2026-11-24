@@ -1,0 +1,27 @@
+name: Verify Myoko summit coordinates
+on:
+  push:
+    branches: [verify-v3.2]
+    paths: [.github/workflows/myoko.yml]
+permissions:
+  contents: read
+jobs:
+  dem:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compare the three documented locations
+        run: |
+          node --input-type=module <<'JS'
+          const points=[["rc3 preset",36.8919,138.1133],["MEIZAN / JMA 49 seconds",36.8913888,138.1136111],["GSI list 48 seconds",36.8913889,138.1133333]];
+          for(const [name,lat,lon] of points){
+            const r=await fetch("https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon="+lon+"&lat="+lat+"&outtype=JSON",{signal:AbortSignal.timeout(20000)});
+            if(!r.ok)throw Error("HTTP "+r.status);
+            const d=await r.json(),e=parseFloat(d.elevation);
+            if(!Number.isFinite(e))throw Error("No DEM");
+            console.log(JSON.stringify({name,lat,lon,elevation:e,hsrc:d.hsrc,rounded:Math.round(e),rhTop:Math.round(e)>=2450?"700":"800"}));
+          }
+          JS
