@@ -659,8 +659,8 @@ function capeRead(v){
 function cinRead(v){
   if(v==null) return ["—","データなし","var(--mist)"];
   const a=Math.abs(v);
-  if(a<25)  return ["蓋なし","発雷を妨げない","var(--warn)"];
-  if(a<50)  return ["蓋うすい","弱い引き金で発雷","var(--warn)"];
+  if(a<25)  return ["蓋なし","発雷を妨げない","var(--alert)"];
+  if(a<50)  return ["蓋うすい","弱い引き金で発雷","var(--strong)"];
   if(a<200) return ["蓋あり","強い上昇流が要る","var(--warn)"];
   return ["蓋つよい","発雷を抑える","var(--calm)"];
 }
@@ -1339,7 +1339,7 @@ function renderDays(){
   });
 }
 
-function renderFocus(){ $("#table-date").textContent=dayLabel(FOCUS); $("#detail-panel summary").textContent=`🔎 モデル別データ（${dayLabel(FOCUS)}）`; renderSpread(); renderCape(); renderTable(); renderSummary(); renderDetail(); }
+function renderFocus(){ $("#table-date").textContent=dayLabel(FOCUS); $("#detail-panel summary").textContent=`🔎 モデル別データ：${dayLabel(FOCUS)}`; renderSpread(); renderCape(); renderTable(); renderSummary(); renderDetail(); }
 
 function spreadRows(level){
   const hours=[3,6,9,12,15,18,21];
